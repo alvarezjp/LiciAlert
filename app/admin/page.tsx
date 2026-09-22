@@ -10,8 +10,8 @@ export const dynamic = 'force-dynamic' // nunca cachear: siempre datos frescos
 type StatsLicitaciones = {
   total: number
   completas: number
-  hoy: number
-  hoy_completas: number
+  cargadas_hoy: number
+  cargadas_hoy_completas: number
 }
 
 type StatsUsuario = {
@@ -20,7 +20,27 @@ type StatsUsuario = {
   trial_inicio: string | null
   trial_fin: string | null
   dias_restantes: number | null
-  correo_enviado_hoy: boolean
+  notificado_hoy: boolean
+}
+
+type StatsLote = {
+  id: string
+  fecha: string
+  corrida: string
+  total_codigos: number
+  pendientes_actuales: number
+  procesados_aprox: number
+  completado: boolean
+  creado_en: string
+  completado_en: string | null
+}
+
+type StatsHistoricoDiario = {
+  fecha: string
+  total: number
+  con_organismo: number
+  sin_organismo_con_detalle: number
+  sin_organismo_sin_detalle: number
 }
 
 export default async function AdminPage() {
@@ -36,20 +56,30 @@ export default async function AdminPage() {
     redirect('/')
   }
 
-  const [{ data: lic, error: errorLic }, { data: statsUsuarios, error: errorUsuarios }] =
-    await Promise.all([
-      supabase.rpc('admin_stats_licitaciones').single<StatsLicitaciones>(),
-      supabase.rpc('admin_stats_usuarios'),
-    ])
+  const [
+    { data: lic, error: errorLic },
+    { data: statsUsuarios, error: errorUsuarios },
+    { data: statsLotes, error: errorLotes },
+    { data: statsHistorico, error: errorHistorico },
+  ] = await Promise.all([
+    supabase.rpc('admin_stats_licitaciones').single<StatsLicitaciones>(),
+    supabase.rpc('admin_stats_usuarios'),
+    supabase.rpc('admin_stats_lotes'),
+    supabase.rpc('admin_stats_historico_diario'),
+  ])
 
   if (errorLic) throw new Error('Error al cargar estadísticas de licitaciones: ' + errorLic.message)
   if (errorUsuarios) throw new Error('Error al cargar estadísticas de usuarios: ' + errorUsuarios.message)
+  if (errorLotes) throw new Error('Error al cargar estadísticas de lotes: ' + errorLotes.message)
+  if (errorHistorico) throw new Error('Error al cargar histórico diario: ' + errorHistorico.message)
 
-  const stats = lic ?? { total: 0, completas: 0, hoy: 0, hoy_completas: 0 }
+  const stats = lic ?? { total: 0, completas: 0, cargadas_hoy: 0, cargadas_hoy_completas: 0 }
   const usuarios = (statsUsuarios ?? []) as StatsUsuario[]
+  const lotes = (statsLotes ?? []) as StatsLote[]
+  const historico = (statsHistorico ?? []) as StatsHistoricoDiario[]
 
   return (
-    <main style={{ padding: 24, maxWidth: 960, margin: '0 auto' }}>
+    <main style={{ padding: 24, maxWidth: 1100, margin: '0 auto' }}>
       <h1>Panel de administrador</h1>
 
       <section
@@ -71,9 +101,85 @@ export default async function AdminPage() {
 
         <div style={{ border: '1px solid #eee', borderRadius: 8, padding: 16 }}>
           <h2 style={{ marginTop: 0 }}>Cargadas hoy</h2>
-          <p>Hoy: <strong>{stats.hoy}</strong></p>
-          <p>Completas hoy: <strong>{stats.hoy_completas}</strong></p>
+          <p>Hoy: <strong>{stats.cargadas_hoy}</strong></p>
+          <p>Completas hoy: <strong>{stats.cargadas_hoy_completas}</strong></p>
         </div>
+      </section>
+
+      <section style={{ marginTop: 32 }}>
+        <h2>Lotes de enriquecimiento por corrida (últimos 14 días)</h2>
+        <p style={{ color: '#888', fontSize: 14 }}>
+          Cada fila es una corrida (mañana/tarde). "Procesados aprox." son los que salieron
+          de la cola de pendientes — no distingue si realmente llegaron con dato o no
+          (ver histórico diario abajo para esa distinción, aunque ahí ya no se puede separar por corrida).
+        </p>
+        <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12 }}>
+          <thead>
+            <tr style={{ textAlign: 'left', borderBottom: '2px solid #ddd' }}>
+              <th style={{ padding: 8 }}>Fecha</th>
+              <th style={{ padding: 8 }}>Corrida</th>
+              <th style={{ padding: 8 }}>Total códigos</th>
+              <th style={{ padding: 8 }}>Procesados (aprox.)</th>
+              <th style={{ padding: 8 }}>Pendientes</th>
+              <th style={{ padding: 8 }}>Completado</th>
+              <th style={{ padding: 8 }}>Completado en</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lotes.map((l) => (
+              <tr key={l.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                <td style={{ padding: 8 }}>{new Date(l.fecha).toLocaleDateString('es-CL')}</td>
+                <td style={{ padding: 8, textTransform: 'capitalize' }}>{l.corrida}</td>
+                <td style={{ padding: 8 }}>{l.total_codigos}</td>
+                <td style={{ padding: 8 }}>{l.procesados_aprox}</td>
+                <td style={{ padding: 8 }}>{l.pendientes_actuales}</td>
+                <td style={{ padding: 8 }}>{l.completado ? '✅' : '⏳'}</td>
+                <td style={{ padding: 8 }}>
+                  {l.completado_en ? new Date(l.completado_en).toLocaleString('es-CL') : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      <section style={{ marginTop: 32 }}>
+        <h2>Histórico diario de enriquecimiento (últimos 14 días)</h2>
+        <p style={{ color: '#888', fontSize: 14 }}>
+          Agregado por día completo (no separable por corrida). "Sin organismo con detalle"
+          son los casos tipo bug del 16/09 — código procesado pero sin dato confirmado.
+          "Sin organismo sin detalle" son los que aún no se procesan (o fallaron antes de guardar el detalle).
+        </p>
+        <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12 }}>
+          <thead>
+            <tr style={{ textAlign: 'left', borderBottom: '2px solid #ddd' }}>
+              <th style={{ padding: 8 }}>Fecha</th>
+              <th style={{ padding: 8 }}>Total</th>
+              <th style={{ padding: 8 }}>Con organismo</th>
+              <th style={{ padding: 8 }}>Sin organismo (con detalle) ⚠️</th>
+              <th style={{ padding: 8 }}>Sin organismo (sin detalle)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {historico.map((h) => (
+              <tr key={h.fecha} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                <td style={{ padding: 8 }}>{new Date(h.fecha).toLocaleDateString('es-CL')}</td>
+                <td style={{ padding: 8 }}>{h.total}</td>
+                <td style={{ padding: 8 }}>{h.con_organismo}</td>
+                <td
+                  style={{
+                    padding: 8,
+                    color: h.sin_organismo_con_detalle > 0 ? '#c62828' : undefined,
+                    fontWeight: h.sin_organismo_con_detalle > 0 ? 600 : undefined,
+                  }}
+                >
+                  {h.sin_organismo_con_detalle}
+                </td>
+                <td style={{ padding: 8 }}>{h.sin_organismo_sin_detalle}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </section>
 
       <section style={{ marginTop: 32 }}>
@@ -109,7 +215,7 @@ export default async function AdminPage() {
                       ? `Vencido hace ${Math.abs(u.dias_restantes)} días`
                       : `${u.dias_restantes} días`}
                   </td>
-                  <td style={{ padding: 8 }}>{u.correo_enviado_hoy ? '✅ Sí' : '❌ No'}</td>
+                  <td style={{ padding: 8 }}>{u.notificado_hoy ? '✅ Sí' : '❌ No'}</td>
                 </tr>
               )
             })}

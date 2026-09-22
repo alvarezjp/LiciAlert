@@ -361,3 +361,48 @@ Cada etapa tiene: objetivo, tareas, y **criterio de aceptación** (cómo saber q
   1. Confirmar la ruta real de login del proyecto y ajustar `redirect('/login')` en `app/admin/page.tsx` si no coincide.
   2. Ejecutar la prueba manual de bloqueo a no-admin descrita arriba antes de dar la etapa por cerrada al 100%.
 - Próximo paso sugerido: correr la verificación manual pendiente (punto 1 de arriba) y, una vez confirmada, marcar esa línea como hecha en el checklist de la Etapa 10. Después, decidir si se retoma la Etapa 7 (responsive/mobile y checklist de demo) o el enriquecimiento agresivo de backlog pendiente de la Etapa 9.
+
+### [2026-09-10] — Agente/sesión: Claude (Etapa 11 — enriquecimiento por lotes + investigación de rate limiting)
+
+- Etapa en la que se trabajó: Etapa 11 (nueva) — enriquecimiento garantizado antes de notificar al cliente, con foco en robustez ante fallas de la API externa de Mercado Público.
+
+- Qué se completó:
+
+  **En SQL:**
+  1. Tabla `lotes_enriquecimiento` (id, fecha, corrida, codigos_pendientes jsonb, total_codigos, completado, notificacion_enviada, creado_en, completado_en). Reemplaza el enfoque de "tope fijo por corrida" de la Etapa 9 (nunca desplegada) — cada corrida de ingesta arma un lote con los códigos sin `organismo` de ESA corrida, y el correo solo se dispara cuando el lote llega a 0 pendientes.
+  2. Función `cron_unschedule_seguro(p_nombre text)` — wrapper que atrapa la excepción que lanza `cron.unschedule()` cuando el job no existe todavía (bug real encontrado al desplegar por primera vez).
+  3. Cron `continuar-enriquecimiento-lotes` (cada 5 min) — retoma el lote abierto más antiguo. Cron `notificaciones-diarias` (de la Etapa 5, horario fijo) fue dado de baja: el envío ahora lo dispara el evento "lote completado", no un horario adivinado.
+  4. Tabla `estado_pausa_enriquecimiento` (id boolean singleton, pausado_hasta timestamptz, cortes_seguidos int) — mecanismo de pausa ante rate limiting de la API externa. Reemplazó un primer intento (`estado_cuota_api`, pensado para "cuota diaria agotada hasta mañana") que se descartó por evidencia de que el bloqueo real es más parecido a un rate limit de corto plazo o a ruido intermitente, no a una cuota diaria completa.
+  5. Tabla `contador_llamadas_api` (fecha date PK, cantidad int) + función `incrementar_contador_llamadas(p_fecha, p_cantidad)` (atómica, vía `on conflict do update`) — tope duro de 9.000 peticiones de detalle/día (de un límite documentado de 10.000/día), como red de seguridad independiente de reconocer el status HTTP correcto.
+  6. RLS habilitado en `contador_llamadas_api` (sin políticas — solo accesible por `service_role`, mismo patrón que el resto de tablas internas del proyecto).
+
+  **En la Edge Function `ingesta-diaria/index.ts` (reescrita varias veces en el día, ver historial de ajustes abajo):**
+  1. Rediseño completo: la función ahora soporta `?accion=ingestar` (el que llaman los crons de las 00:00 y 12:00 Chile — descarga el listado, hace upsert, y arma el lote de esa corrida) y `?accion=continuar` (el que llama el cron cada 5 min — retoma el lote abierto más antiguo).
+  2. Timeout por petición individual (`AbortController`, 8s) para que una respuesta colgada no bloquee toda una tanda de 10.
+  3. Cortacircuito de 2 niveles ante 429/403 o fallas masivas: 1er corte → pausa 60s; 2do corte seguido sin una corrida exitosa entre medio → escala a pausa de 24h. Se resetea a 0 apenas una corrida avanza sin cortarse.
+  4. Integración del tope diario duro: antes de mandar cada tanda, se revisa si sumarla superaría 9.000/día; si es así, se corta ahí sin importar el status HTTP.
+  5. Deduplicación entre lotes abiertos: al crear un lote nuevo, se excluyen los códigos que ya están pendientes en otro lote todavía no completado — evita que dos corridas de ingesta superpuestas dupliquen trabajo si se sube la frecuencia de ingesta en el futuro.
+  6. Logging detallado por tanda (`X/10 ok en Nms`, status de los fallos, conteo diario) para poder diagnosticar en vivo vía logs de Supabase.
+  7. Se creó además una función de diagnóstico aislada, `supabase/functions/test-mp-api/index.ts` (no forma parte del flujo de producción), que hace una sola llamada a la API de Mercado Público y devuelve status/headers/cuerpo crudo — pensada para aislar si los fallos vienen de la API externa o de algo en nuestro propio código.
+
+  **Hallazgo importante de la sesión:** se detectó que un ticket de la API estaba recibiendo 429/403 (rate limit) incluso con volumen mínimo (30-60 peticiones/día) y con concurrencia bajada hasta 1 (secuencial, sin paralelismo). La misma consulta funciona sin problema desde fuera de Supabase (navegador del usuario). Hipótesis de trabajo: ruido intermitente asociado a la IP de salida compartida de las Edge Functions de Supabase (usada por múltiples proyectos de otros clientes), no relacionado al volumen ni la concurrencia de nuestro propio código. No se confirmó al 100% todavía con la función de diagnóstico (`test-mp-api`) — las primeras pruebas salieron limpias, pero el fenómeno es intermitente por naturaleza y no se reprodujo a voluntad en el momento de probar.
+
+- Qué quedó pendiente / a medias:
+  1. **BLOQUEO ACTIVO SIN RESOLVER TODAVÍA**: el usuario identificó un error en el código durante la sesión (de `ingesta-diaria` o del SQL, a confirmar cuál) que todavía no fue especificado ni corregido — pendiente de detalle en la próxima sesión antes de dar por buena esta etapa.
+  2. El cron `continuar-enriquecimiento-lotes` fue detenido manualmente durante la sesión para diagnosticar sin seguir gastando peticiones, y **no se ha confirmado si quedó reactivado** al cierre de la sesión — verificar con `select jobname, active from cron.job` antes de asumir que el enriquecimiento automático está corriendo.
+  3. La hipótesis de "IP compartida de Supabase" como causa del rate limiting no está confirmada al 100% — las pruebas con `test-mp-api` no lograron reproducir un 429 todavía. Falta repetir la prueba con más volumen y en distintos momentos del día.
+  4. `CONCURRENCIA` quedó en 8 (vuelta al valor de las Etapas 8/9) tras confirmar que bajarla a 3 e incluso a 1 no evitaba el rate limit — no hay evidencia de que el valor de concurrencia sea la variable relevante.
+  5. Backlog histórico de licitaciones sin enriquecer (de antes de la Etapa 11): decisión explícita del usuario de NO tocarlo por ahora (ver sesión del 2026-09-08/09) — sigue sin resolverse, a propósito.
+  6. Pendiente evaluar si conviene subir de 2 a 4 ingestas/día (para que los correos lleguen dentro de horario laboral) — se decidió postergar esa decisión hasta tener un dato limpio de cuánto tarda una tanda cuando la API está sana, dato que todavía no se consiguió porque las pruebas de hoy estuvieron contaminadas por los cortes de rate limit.
+
+- Decisiones tomadas que no estaban en el plan original:
+  1. Se reemplazó el diseño de "cuota diaria agotada, esperar al día siguiente" por un esquema de "pausa corta con escalamiento a pausa larga" — decisión basada en evidencia real (el sistema logró avanzar códigos entre cortes, algo incompatible con una cuota diaria totalmente agotada).
+  2. Se agregó un tope duro de peticiones/día como segunda red de seguridad, independiente del cortacircuito por status HTTP — decisión explícita del usuario tras la discusión de alcance de la mañana.
+  3. Se decidió NO subir la frecuencia de ingesta ni acortar el cron de "continuar" (5 min) hasta tener datos limpios del comportamiento real de la API — se prefirió no ajustar parámetros de velocidad a ciegas mientras hay una variable externa no resuelta (el rate limiting intermitente).
+
+- Bloqueos o cosas que el humano debe resolver:
+  1. **Especificar cuál fue el error de código/SQL detectado** durante la sesión, para poder corregirlo en la próxima.
+  2. Confirmar si el cron `continuar-enriquecimiento-lotes` quedó activo o detenido al cierre de la sesión.
+  3. Decidir si vale la pena contactar a Mercado Público / revisar el portal del ticket para entender mejor la causa real del rate limiting (cuota, IP, o algo distinto), dado que la investigación propia no llegó a una conclusión 100% confirmada.
+
+- Próximo paso sugerido: retomar identificando el error específico de código que el usuario detectó, corregirlo, confirmar el estado real del cron, y continuar la investigación del rate limiting con la función `test-mp-api` (más volumen, distintos momentos del día) antes de decidir sobre la frecuencia de ingesta o el valor de `CONCURRENCIA`.

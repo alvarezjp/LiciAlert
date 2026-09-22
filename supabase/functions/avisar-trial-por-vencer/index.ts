@@ -55,7 +55,7 @@ Deno.serve(async (_req) => {
 
   const { data: usuarios, error } = await supabase
     .from('perfiles')
-    .select('id, email, trial_fin')
+    .select('id, trial_fin')
     .eq('plan', 'trial')
     .eq('activo', true)
     .eq('aviso_trial_enviado', false)
@@ -73,7 +73,9 @@ Deno.serve(async (_req) => {
   const errores: string[] = []
 
   for (const usuario of usuarios ?? []) {
-    if (!usuario.email) continue
+    const { data: datosUsuario } = await supabase.auth.admin.getUserById(usuario.id)
+    const email = datosUsuario?.user?.email
+    if (!email) continue
 
     try {
       const fechaFin = new Date(usuario.trial_fin).toLocaleDateString('es-CL', {
@@ -92,7 +94,7 @@ Deno.serve(async (_req) => {
       await enviarEmail(
         resendApiKey,
         resendFrom,
-        usuario.email,
+        email,
         html,
         'Tu prueba gratuita está por terminar'
       )
@@ -101,7 +103,7 @@ Deno.serve(async (_req) => {
 
       enviados++
     } catch (err) {
-      errores.push(`${usuario.email}: ${err instanceof Error ? err.message : String(err)}`)
+      errores.push(`${email}: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
