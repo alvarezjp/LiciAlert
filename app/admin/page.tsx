@@ -116,7 +116,7 @@ export default async function AdminPage() {
         <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12 }}>
           <thead>
             <tr style={{ textAlign: 'left', borderBottom: '2px solid #ddd' }}>
-              <th style={{ padding: 8 }}>Fecha</th>
+              <th style={{ padding: 8 }}>Fecha licitaciones</th>
               <th style={{ padding: 8 }}>Corrida</th>
               <th style={{ padding: 8 }}>Total códigos</th>
               <th style={{ padding: 8 }}>Procesados (aprox.)</th>
@@ -128,7 +128,7 @@ export default async function AdminPage() {
           <tbody>
             {lotes.map((l) => (
               <tr key={l.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                <td style={{ padding: 8 }}>{new Date(l.fecha).toLocaleDateString('es-CL')}</td>
+                <td style={{ padding: 8 }}>{l.fecha.split('-').reverse().join('-')}</td>
                 <td style={{ padding: 8, textTransform: 'capitalize' }}>{l.corrida}</td>
                 <td style={{ padding: 8 }}>{l.total_codigos}</td>
                 <td style={{ padding: 8 }}>{l.procesados_aprox}</td>

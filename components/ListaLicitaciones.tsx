@@ -143,7 +143,7 @@ export default function ListaLicitaciones({
               <button onClick={() => verDetalle(lic)}>Ver detalle en Mercado Público</button>
               <button
                 onClick={() => marcarEstado(lic.codigo, 'vista')}
-                disabled={lic.estado_usuario === 'vista'}
+                disabled={lic.estado_usuario === 'vista' || lic.estado_usuario === 'postulada' }
               >
                 Marcar como vista
               </button>

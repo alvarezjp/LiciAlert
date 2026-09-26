@@ -55,9 +55,9 @@ export default function LoginPage() {
           {cargando ? 'Ingresando...' : 'Ingresar'}
         </button>
       </form>
-      <p style={{ marginTop: 16 }}>
+      {/* <p style={{ marginTop: 16 }}>
         ¿No tienes cuenta? <a href="/registro">Regístrate</a>
-      </p>
+      </p> */}
     </div>
   )
 }

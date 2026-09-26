@@ -2,25 +2,19 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 // Ubicación en el proyecto: supabase/functions/ingesta-diaria/index.ts
 //
-// ETAPA 11 (v2) — Enriquecimiento SECUENCIAL con delay fijo entre peticiones.
+// ETAPA 11 (v3) — Dos corridas diarias con envío de correo diferenciado:
+//   - Corrida "tarde" (14:00 Chile): al completarse el lote, el correo se
+//     envía de inmediato.
+//   - Corrida "noche" (23:30 Chile): al completarse el lote, el correo NO
+//     se envía de inmediato — queda pospuesto hasta las 07:00 del día
+//     siguiente (hora Chile). El cron "continuar-enriquecimiento-lotes"
+//     (cada 3 min) revisa lotes completados sin avisar y respeta ese
+//     horario mínimo antes de disparar la notificación.
 //
-// CAMBIO DE DISEÑO IMPORTANTE respecto a la v1 (paralela con CONCURRENCIA):
-// se confirmó empíricamente que la API de Mercado Público responde 429
-// incluso con concurrencia 1 (peticiones secuenciales sin espera), pero
-// NO responde 429 si se espera 2000ms entre una petición y la siguiente.
-// Por eso se reemplaza el esquema de tandas paralelas por un bucle
-// estrictamente secuencial con delay fijo. Costo medido por código:
-// ~180ms de petición + 2000ms de espera ≈ 2.18s/código.
-//
-// Esto vuelve mucho menos necesario el cortacircuito de 429/403 (ya no
-// debería activarse en operación normal), pero se conserva como red de
-// seguridad silenciosa por si la API cambia de comportamiento.
-//
-// Cron recomendado para "continuar": cada 180s (`*/3 * * * *`), múltiplo
-// exacto de 60s que cabe en sintaxis estándar de cron sin necesitar la
-// sintaxis especial de segundos (limitada a 1-59). Con PRESUPUESTO_MS de
-// 135s, queda ~45s de margen antes del siguiente tick — no se necesita
-// mecanismo de lock adicional contra solapamiento.
+// Enriquecimiento SECUENCIAL con delay fijo entre peticiones (sin cambios
+// respecto a v2): se confirmó empíricamente que la API de Mercado Público
+// responde 429 incluso con concurrencia 1 sin espera, pero no responde 429
+// si se espera 2000ms entre una petición y la siguiente.
 
 const DELAY_ENTRE_PETICIONES_MS = 2_000 // confirmado empíricamente: sin esto, 429 garantizado
 const PRESUPUESTO_MS = 135_000 // margen de seguridad bajo el límite de 150s del plan gratuito
@@ -30,8 +24,15 @@ const PAUSA_CORTA_SEGUNDOS = 60 // pausa tras el 1er corte
 const PAUSA_LARGA_HORAS = 24 // pausa tras 2 cortes seguidos sin éxito entre medio
 const UMBRAL_CORTES_PARA_ESCALAR = 2
 const TOPE_DIARIO_LLAMADAS = 9_000 // límite real de la API: 10.000/día — se deja margen de 1.000
+const HORA_ENVIO_CORRIDA_NOCHE = 7 // 07:00 Chile del día siguiente
 
 type CodigoPendiente = { codigo: string; nombre: string }
+
+type Lote = {
+  id: string
+  codigos_pendientes: CodigoPendiente[]
+  hora_envio_permitida: string | null
+}
 
 type ResultadoDetalle =
   | { ok: true; datos: any }
@@ -56,6 +57,40 @@ function obtenerServiceRoleKey(): string | undefined {
 
 function fechaChileISO(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date())
+}
+
+// --- Utilidades de fecha/hora Chile → UTC (manejan verano/invierno solas) ---
+
+// Dado un año/mes/día (strings, como se calculan en accion=ingestar), devuelve
+// el día calendario siguiente, sin depender de zona horaria (trabaja en UTC
+// "de mentira" solo para sumar 1 día de forma segura).
+function diaSiguiente(anio: string, mes: string, dia: string) {
+  const d = new Date(Date.UTC(Number(anio), Number(mes) - 1, Number(dia)))
+  d.setUTCDate(d.getUTCDate() + 1)
+  return {
+    anio: String(d.getUTCFullYear()),
+    mes: String(d.getUTCMonth() + 1).padStart(2, '0'),
+    dia: String(d.getUTCDate()).padStart(2, '0'),
+  }
+}
+
+// Convierte una fecha/hora "hora Chile" a su equivalente UTC en ISO,
+// detectando automáticamente el offset vigente (UTC-3 verano / UTC-4
+// invierno) vía Intl, para no tener que hardcodear el offset a mano como
+// se hace en los comentarios de los cron jobs.
+function fechaChileAUtcISO(anio: string, mes: string, dia: string, hora: number, minuto: number): string {
+  const fechaNaiveUTC = new Date(Date.UTC(Number(anio), Number(mes) - 1, Number(dia), hora, minuto, 0))
+
+  const partes = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Santiago',
+    timeZoneName: 'shortOffset',
+  }).formatToParts(fechaNaiveUTC)
+
+  const offsetTexto = partes.find((p) => p.type === 'timeZoneName')?.value ?? 'GMT-3'
+  const match = offsetTexto.match(/GMT([+-]\d+)/)
+  const offsetHoras = match ? parseInt(match[1], 10) : -3
+
+  return new Date(fechaNaiveUTC.getTime() - offsetHoras * 60 * 60 * 1000).toISOString()
 }
 
 // --- Pausa corta/larga por rate limit (429/403 o fallas repetidas) ---
@@ -154,13 +189,6 @@ async function obtenerDetalleLicitacion(codigo: string, ticket: string): Promise
       .filter(Boolean)
       .join(' | ') || null
 
-    // Fecha de publicación EXPLÍCITA desde la API (campo FechaInicio del
-    // endpoint de detalle). Antes se guardaba solo la fecha de la corrida
-    // de ingesta (fecha del cron), no la fecha real de publicación de la
-    // licitación. Solo se incluye la clave si la API trae un valor: así,
-    // si viene null/ausente, el upsert NO pisa el placeholder ya guardado
-    // por el paso de listado (queda pendiente de corregirse en la próxima
-    // corrida en vez de perder el dato).
     const datosBase: Record<string, any> = {
       codigo,
       organismo: detalle.Comprador?.NombreOrganismo ?? null,
@@ -172,7 +200,7 @@ async function obtenerDetalleLicitacion(codigo: string, ticket: string): Promise
       actualizado_en: new Date().toISOString(),
     }
 
-     if (detalle.Fechas?.FechaInicio) {
+    if (detalle.Fechas?.FechaInicio) {
       datosBase.fecha_publicacion = detalle.Fechas.FechaInicio
     }
 
@@ -214,7 +242,6 @@ async function procesarLote(
   while (pendientes.length > 0 && Date.now() - inicioMs < PRESUPUESTO_MS) {
     const item = pendientes[0]
 
-    // Tope diario duro: se revisa ANTES de mandar la petición.
     if (conteoActual + 1 > TOPE_DIARIO_LLAMADAS) {
       console.error(
         `TOPE DIARIO: se alcanzaría el límite de ${TOPE_DIARIO_LLAMADAS} peticiones/día ` +
@@ -262,13 +289,9 @@ async function procesarLote(
           `Corte seguido #${resultadoPausa.cortesSeguidos}. ` +
           `Pausa activada: ${resultadoPausa.tipo === 'larga' ? `${PAUSA_LARGA_HORAS}h (escalada)` : `${PAUSA_CORTA_SEGUNDOS}s`}.`
         )
-        // el código que falló se deja al inicio de pendientes para reintentar
-        // en la próxima corrida, no se descarta
         break
       }
 
-      // Reintenta más tarde: se manda al final de la cola en vez de
-      // reintentar inmediatamente el mismo código, para no trabarse.
       pendientes = [...pendientes.slice(1), item]
     }
 
@@ -338,7 +361,7 @@ Deno.serve(async (req) => {
     supabase = createClient(supabaseUrl, serviceRoleKey)
 
     let cantidadInsertadas = 0
-    let lote: { id: string; codigos_pendientes: CodigoPendiente[] } | null = null
+    let lote: Lote | null = null
 
     if (accion === 'continuar') {
       const { data: bloqueoObtenido } = await supabase.rpc('intentar_bloquear_enriquecimiento', {
@@ -352,11 +375,14 @@ Deno.serve(async (req) => {
         )
       }
 
+      // Solo se avisa si ya se cumplió hora_envio_permitida (inmediato para
+      // la corrida "tarde", 07:00 del día siguiente para la corrida "noche").
       const { data: lotesSinAvisar } = await supabase
         .from('lotes_enriquecimiento')
         .select('id')
         .eq('completado', true)
         .eq('notificacion_enviada', false)
+        .lte('hora_envio_permitida', new Date().toISOString())
 
       for (const l of lotesSinAvisar ?? []) {
         await dispararNotificaciones(supabaseUrl, l.id as string, supabase)
@@ -364,7 +390,7 @@ Deno.serve(async (req) => {
 
       const { data: loteAbierto, error: errorLote } = await supabase
         .from('lotes_enriquecimiento')
-        .select('id, codigos_pendientes')
+        .select('id, codigos_pendientes, hora_envio_permitida')
         .eq('completado', false)
         .order('creado_en', { ascending: true })
         .limit(1)
@@ -379,12 +405,8 @@ Deno.serve(async (req) => {
         )
       }
 
-      lote = loteAbierto as any
-        } else {
-      // Parámetro opcional SOLO para pruebas manuales: ?fecha=DDMMYYYY
-      // Si no se pasa, usa "hoy" como siempre (comportamiento normal del cron).
-      const fechaOverride = url.searchParams.get('fecha')
-
+      lote = loteAbierto as Lote
+    } else {
       const partesFecha = new Intl.DateTimeFormat('en-CA', {
         timeZone: 'America/Santiago',
         year: 'numeric',
@@ -394,25 +416,24 @@ Deno.serve(async (req) => {
         hour12: false,
       }).formatToParts(new Date())
 
+      const dia = partesFecha.find((p) => p.type === 'day')!.value
+      const mes = partesFecha.find((p) => p.type === 'month')!.value
+      const anio = partesFecha.find((p) => p.type === 'year')!.value
       const horaChile = parseInt(partesFecha.find((p) => p.type === 'hour')!.value, 10)
-
-      let dia: string, mes: string, anio: string
-
-      if (fechaOverride) {
-        if (!/^\d{8}$/.test(fechaOverride)) {
-          throw new Error('Parámetro "fecha" inválido, formato esperado DDMMYYYY (ej: 14092026)')
-        }
-        dia = fechaOverride.slice(0, 2)
-        mes = fechaOverride.slice(2, 4)
-        anio = fechaOverride.slice(4, 8)
-      } else {
-        dia = partesFecha.find((p) => p.type === 'day')!.value
-        mes = partesFecha.find((p) => p.type === 'month')!.value
-        anio = partesFecha.find((p) => p.type === 'year')!.value
-      }
-
       fecha = `${dia}${mes}${anio}`
-      const corrida = fechaOverride ? 'prueba-manual' : horaChile < 12 ? 'manana' : 'tarde'
+
+      // Dos corridas: "tarde" (14:00, correo inmediato) y "noche" (23:30,
+      // correo pospuesto a las 07:00 del día siguiente). Umbral a las 20h
+      // separa ambas con margen de sobra entre 14:00 y 23:30.
+      const corrida = horaChile < 20 ? 'tarde' : 'noche'
+
+      const horaEnvioPermitida =
+        corrida === 'tarde'
+          ? new Date().toISOString()
+          : (() => {
+              const manana = diaSiguiente(anio, mes, dia)
+              return fechaChileAUtcISO(manana.anio, manana.mes, manana.dia, HORA_ENVIO_CORRIDA_NOCHE, 0)
+            })()
 
       const urlListado = `https://api.mercadopublico.cl/servicios/v1/publico/licitaciones.json?fecha=${fecha}&estado=publicada&ticket=${ticket}`
       const respListado = await fetch(urlListado)
@@ -480,12 +501,13 @@ Deno.serve(async (req) => {
             corrida,
             codigos_pendientes: pendientesIniciales,
             total_codigos: pendientesIniciales.length,
+            hora_envio_permitida: horaEnvioPermitida,
           })
-          .select('id, codigos_pendientes')
+          .select('id, codigos_pendientes, hora_envio_permitida')
           .single()
 
         if (errorNuevoLote) throw errorNuevoLote
-        lote = nuevoLote as any
+        lote = nuevoLote as Lote
       } else {
         console.log(
           'Sin códigos nuevos para enriquecer en esta corrida (todos ya estaban cubiertos por un lote abierto existente).'
@@ -519,7 +541,17 @@ Deno.serve(async (req) => {
             .update({ completado: true, completado_en: new Date().toISOString() })
             .eq('id', lote.id)
 
-          await dispararNotificaciones(supabaseUrl, lote.id, supabase)
+          const yaSePuedeAvisar =
+            !lote.hora_envio_permitida || new Date(lote.hora_envio_permitida) <= new Date()
+
+          if (yaSePuedeAvisar) {
+            await dispararNotificaciones(supabaseUrl, lote.id, supabase)
+          } else {
+            console.log(
+              `Lote ${lote.id} completado, pero el correo queda pospuesto hasta ${lote.hora_envio_permitida} ` +
+              `(lo recogerá el cron "continuar-enriquecimiento-lotes").`
+            )
+          }
         }
       }
     }
