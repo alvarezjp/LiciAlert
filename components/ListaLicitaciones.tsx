@@ -22,6 +22,14 @@ const COLORES_ESTADO: Record<string, { fondo: string; texto: string; etiqueta: s
   postulada: { fondo: '#e8f5e9', texto: '#2e7d32', etiqueta: 'Postulada' },
 }
 
+// Evita el bug de "un día menos": new Date("2026-09-25") se interpreta como
+// UTC medianoche, y al convertir a hora de Chile retrocede al día anterior.
+// Parseamos los componentes y armamos la fecha en hora LOCAL, sin pasar por UTC.
+function formatearFechaLocal(fechaISO: string) {
+  const [anio, mes, dia] = fechaISO.slice(0, 10).split('-').map(Number)
+  return new Date(anio, mes - 1, dia).toLocaleDateString('es-CL')
+}
+
 const URL_BASE_MERCADO_PUBLICO =
   'http://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion='
 
@@ -124,10 +132,10 @@ export default function ListaLicitaciones({
             <p style={{ margin: '4px 0', fontSize: 14, color: '#888' }}>
               Código: {lic.codigo}
               {lic.fecha_publicacion && (
-                <> · Publicada: {new Date(lic.fecha_publicacion).toLocaleDateString('es-CL')}</>
+                <> · Publicada: {formatearFechaLocal(lic.fecha_publicacion)}</>
               )}
               {lic.fecha_cierre && (
-                <> · Cierra: {new Date(lic.fecha_cierre).toLocaleDateString('es-CL')}</>
+                <> · Cierra: {formatearFechaLocal(lic.fecha_cierre)}</>
               )}
             </p>
 

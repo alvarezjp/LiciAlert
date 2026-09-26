@@ -154,19 +154,29 @@ async function obtenerDetalleLicitacion(codigo: string, ticket: string): Promise
       .filter(Boolean)
       .join(' | ') || null
 
-    return {
-      ok: true,
-      datos: {
-        codigo,
-        organismo: detalle.Comprador?.NombreOrganismo ?? null,
-        monto_estimado: typeof detalle.MontoEstimado === 'number' ? detalle.MontoEstimado : null,
-        estado: detalle.Estado ?? null,
-        descripcion: detalle.Descripcion ?? null,
-        productos_texto: productosTexto,
-        raw_json_detalle: detalle,
-        actualizado_en: new Date().toISOString(),
-      },
+    // Fecha de publicación EXPLÍCITA desde la API (campo FechaInicio del
+    // endpoint de detalle). Antes se guardaba solo la fecha de la corrida
+    // de ingesta (fecha del cron), no la fecha real de publicación de la
+    // licitación. Solo se incluye la clave si la API trae un valor: así,
+    // si viene null/ausente, el upsert NO pisa el placeholder ya guardado
+    // por el paso de listado (queda pendiente de corregirse en la próxima
+    // corrida en vez de perder el dato).
+    const datosBase: Record<string, any> = {
+      codigo,
+      organismo: detalle.Comprador?.NombreOrganismo ?? null,
+      monto_estimado: typeof detalle.MontoEstimado === 'number' ? detalle.MontoEstimado : null,
+      estado: detalle.Estado ?? null,
+      descripcion: detalle.Descripcion ?? null,
+      productos_texto: productosTexto,
+      raw_json_detalle: detalle,
+      actualizado_en: new Date().toISOString(),
     }
+
+     if (detalle.Fechas?.FechaInicio) {
+      datosBase.fecha_publicacion = detalle.Fechas.FechaInicio
+    }
+
+    return { ok: true, datos: datosBase }
   } catch (err) {
     const esTimeout = err instanceof DOMException && err.name === 'AbortError'
     return { ok: false, error: esTimeout ? 'timeout' : String((err as any)?.message ?? err) }
@@ -305,252 +315,6 @@ async function dispararNotificaciones(supabaseUrl: string, loteId: string, supab
   }
 }
 
-// Deno.serve(async (req) => {
-//   const inicioMs = Date.now()
-//   let supabase: ReturnType<typeof createClient> | null = null
-//   let fecha: string | null = null
-
-//   try {
-//     const ticket = Deno.env.get('MERCADOPUBLICO_TICKET')
-//     const supabaseUrl = Deno.env.get('SUPABASE_URL')
-//     const serviceRoleKey = obtenerServiceRoleKey()
-
-//     if (!ticket) throw new Error('Falta el secret MERCADOPUBLICO_TICKET')
-//     if (!supabaseUrl || !serviceRoleKey) {
-//       throw new Error(
-//         'Faltan las variables SUPABASE_URL / llave de servicio (SUPABASE_SECRET_KEYS o SUPABASE_SERVICE_ROLE_KEY)'
-//       )
-//     }
-
-//     supabase = createClient(supabaseUrl, serviceRoleKey)
-
-//     const url = new URL(req.url)
-//     const accion = url.searchParams.get('accion') ?? 'ingestar'
-
-//     let cantidadInsertadas = 0
-//     let lote: { id: string; codigos_pendientes: CodigoPendiente[] } | null = null
-
-//     if (accion === 'continuar') {
-//       const { data: bloqueoObtenido } = await supabase.rpc('intentar_bloquear_enriquecimiento', {
-//         p_segundos_stale: 160,
-//       })
-
-//       if (!bloqueoObtenido) {
-//         return new Response(
-//           JSON.stringify({ ok: true, mensaje: 'Ya hay otra corrida de enriquecimiento en curso, se omite esta invocación.' }),
-//           { headers: { 'Content-Type': 'application/json' } }
-//         )
-//       }
-
-//       const { data: lotesSinAvisar } = await supabase
-//         .from('lotes_enriquecimiento')
-//         .select('id')
-//         .eq('completado', true)
-//         .eq('notificacion_enviada', false)
-
-//       for (const l of lotesSinAvisar ?? []) {
-//         await dispararNotificaciones(supabaseUrl, l.id as string, supabase)
-//       }
-
-//       const { data: loteAbierto, error: errorLote } = await supabase
-//         .from('lotes_enriquecimiento')
-//         .select('id, codigos_pendientes')
-//         .eq('completado', false)
-//         .order('creado_en', { ascending: true })
-//         .limit(1)
-//         .maybeSingle()
-
-//       if (errorLote) throw errorLote
-
-//       if (!loteAbierto) {
-//         return new Response(
-//           JSON.stringify({ ok: true, mensaje: 'No hay lotes de enriquecimiento pendientes.' }),
-//           { headers: { 'Content-Type': 'application/json' } }
-//         )
-//       }
-
-//       lote = loteAbierto as any
-//     } else {
-//       const partesFecha = new Intl.DateTimeFormat('en-CA', {
-//         timeZone: 'America/Santiago',
-//         year: 'numeric',
-//         month: '2-digit',
-//         day: '2-digit',
-//         hour: '2-digit',
-//         hour12: false,
-//       }).formatToParts(new Date())
-
-//       const dia = partesFecha.find((p) => p.type === 'day')!.value
-//       const mes = partesFecha.find((p) => p.type === 'month')!.value
-//       const anio = partesFecha.find((p) => p.type === 'year')!.value
-//       const horaChile = parseInt(partesFecha.find((p) => p.type === 'hour')!.value, 10)
-//       fecha = `${dia}${mes}${anio}`
-//       const corrida = horaChile < 12 ? 'manana' : 'tarde'
-
-//       const urlListado = `https://api.mercadopublico.cl/servicios/v1/publico/licitaciones.json?fecha=${fecha}&ticket=${ticket}`
-//       const respListado = await fetch(urlListado)
-
-//       if (!respListado.ok) {
-//         throw new Error(`La API de Mercado Público respondió con status ${respListado.status}`)
-//       }
-
-//       const dataListado = await respListado.json()
-//       const listado: any[] = dataListado?.Listado ?? []
-
-//       const filasBase = Array.from(
-//         new Map(
-//           listado
-//             .map((item) => ({
-//               codigo: item.CodigoExterno,
-//               nombre: item.Nombre,
-//               fecha_publicacion: `${anio}-${mes}-${dia}`,
-//               fecha_cierre: item.FechaCierre ?? null,
-//               raw_json: item,
-//               actualizado_en: new Date().toISOString(),
-//             }))
-//             .filter((fila) => fila.codigo && fila.nombre)
-//             .map((fila) => [fila.codigo, fila])
-//         ).values()
-//       )
-
-//       if (filasBase.length > 0) {
-//         const { error } = await supabase.from('licitaciones').upsert(filasBase, { onConflict: 'codigo' })
-//         if (error) throw error
-//         cantidadInsertadas = filasBase.length
-//       }
-
-//       const codigosDeHoy = filasBase.map((f) => f.codigo)
-//       let pendientesIniciales: CodigoPendiente[] = []
-
-//       if (codigosDeHoy.length > 0) {
-//         const { data: pendientesData, error: errorPendientes } = await supabase
-//           .rpc('codigos_sin_organismo', { p_codigos: codigosDeHoy })
-
-//         if (errorPendientes) throw errorPendientes
-
-//         const { data: lotesAbiertos } = await supabase
-//           .from('lotes_enriquecimiento')
-//           .select('codigos_pendientes')
-//           .eq('completado', false)
-
-//         const codigosYaEnLotesAbiertos = new Set<string>()
-//         for (const l of lotesAbiertos ?? []) {
-//           for (const item of (l.codigos_pendientes as CodigoPendiente[]) ?? []) {
-//             codigosYaEnLotesAbiertos.add(item.codigo)
-//           }
-//         }
-
-//         pendientesIniciales = (pendientesData ?? []).filter(
-//           (row: any) => !codigosYaEnLotesAbiertos.has(row.codigo)
-//         ) as CodigoPendiente[]
-//       }
-
-//       if (pendientesIniciales.length > 0) {
-//         const { data: nuevoLote, error: errorNuevoLote } = await supabase
-//           .from('lotes_enriquecimiento')
-//           .insert({
-//             fecha: `${anio}-${mes}-${dia}`,
-//             corrida,
-//             codigos_pendientes: pendientesIniciales,
-//             total_codigos: pendientesIniciales.length,
-//           })
-//           .select('id, codigos_pendientes')
-//           .single()
-
-//         if (errorNuevoLote) throw errorNuevoLote
-//         lote = nuevoLote as any
-//       } else {
-//         console.log(
-//           'Sin códigos nuevos para enriquecer en esta corrida (todos ya estaban cubiertos por un lote abierto existente).'
-//         )
-//       }
-//     }
-
-//     let cantidadEnriquecidas = 0
-//     let loteCompletado = false
-//     let cortadoPorCircuito = false
-//     let tipoPausa: 'corta' | 'larga' | undefined
-//     let detenidoPorTopeDiario = false
-
-//     if (lote) {
-//       const enPausa = await pausaActiva(supabase)
-
-//       if (enPausa) {
-//         console.log('Pausa activa por corte(s) reciente(s) — se omite el enriquecimiento esta vez.')
-//         cortadoPorCircuito = true
-//       } else {
-//         const resultado = await procesarLote(supabase, lote, ticket, inicioMs)
-//         cantidadEnriquecidas = resultado.enriquecidas
-//         loteCompletado = resultado.pendientesRestantes.length === 0
-//         cortadoPorCircuito = resultado.cortadoPorCircuito
-//         tipoPausa = resultado.tipoPausa
-//         detenidoPorTopeDiario = resultado.detenidoPorTopeDiario
-
-//         if (loteCompletado) {
-//           await supabase
-//             .from('lotes_enriquecimiento')
-//             .update({ completado: true, completado_en: new Date().toISOString() })
-//             .eq('id', lote.id)
-
-//           await dispararNotificaciones(supabaseUrl, lote.id, supabase)
-//         }
-//       }
-//     }
-
-//     const mensajeError = detenidoPorTopeDiario
-//       ? `TOPE DIARIO alcanzado (${TOPE_DIARIO_LLAMADAS} peticiones/día)`
-//       : cortadoPorCircuito
-//       ? `CORTACIRCUITO${tipoPausa ? ` (${tipoPausa})` : ''}: revisar logs de la función`
-//       : null
-
-//     const { error: logError } = await supabase.from('logs_ingesta').insert({
-//       ok: true,
-//       fecha_consultada: fecha,
-//       cantidad_insertadas: cantidadInsertadas,
-//       cantidad_enriquecidas: cantidadEnriquecidas,
-//       mensaje_error: mensajeError,
-//     })
-//     if (logError) console.error('Error al insertar en logs_ingesta:', logError)
-
-//     return new Response(
-//       JSON.stringify({
-//         ok: true,
-//         accion,
-//         fecha,
-//         insertadas: cantidadInsertadas,
-//         enriquecidas: cantidadEnriquecidas,
-//         loteId: lote?.id ?? null,
-//         loteCompletado,
-//         cortadoPorCircuito,
-//         tipoPausa: tipoPausa ?? null,
-//         detenidoPorTopeDiario,
-//       }),
-//       { headers: { 'Content-Type': 'application/json' } }
-//     )
-//   } catch (err) {
-//     const mensajeError =
-//       err instanceof Error ? err.message : (err as any)?.message ?? JSON.stringify(err)
-
-//     console.error('Error en ingesta-diaria:', err)
-
-//     if (supabase) {
-//       const { error: logError } = await supabase.from('logs_ingesta').insert({
-//         ok: false,
-//         fecha_consultada: fecha,
-//         cantidad_insertadas: 0,
-//         cantidad_enriquecidas: 0,
-//         mensaje_error: mensajeError,
-//       })
-//       if (logError) console.error('Error al insertar en logs_ingesta:', logError)
-//     }
-
-//     return new Response(JSON.stringify({ ok: false, error: mensajeError }), {
-//       status: 500,
-//       headers: { 'Content-Type': 'application/json' },
-//     })
-//   }
-// })
-
 Deno.serve(async (req) => {
   const inicioMs = Date.now()
   let supabase: ReturnType<typeof createClient> | null = null
@@ -616,7 +380,11 @@ Deno.serve(async (req) => {
       }
 
       lote = loteAbierto as any
-    } else {
+        } else {
+      // Parámetro opcional SOLO para pruebas manuales: ?fecha=DDMMYYYY
+      // Si no se pasa, usa "hoy" como siempre (comportamiento normal del cron).
+      const fechaOverride = url.searchParams.get('fecha')
+
       const partesFecha = new Intl.DateTimeFormat('en-CA', {
         timeZone: 'America/Santiago',
         year: 'numeric',
@@ -626,14 +394,27 @@ Deno.serve(async (req) => {
         hour12: false,
       }).formatToParts(new Date())
 
-      const dia = partesFecha.find((p) => p.type === 'day')!.value
-      const mes = partesFecha.find((p) => p.type === 'month')!.value
-      const anio = partesFecha.find((p) => p.type === 'year')!.value
       const horaChile = parseInt(partesFecha.find((p) => p.type === 'hour')!.value, 10)
-      fecha = `${dia}${mes}${anio}`
-      const corrida = horaChile < 12 ? 'manana' : 'tarde'
 
-      const urlListado = `https://api.mercadopublico.cl/servicios/v1/publico/licitaciones.json?fecha=${fecha}&ticket=${ticket}`
+      let dia: string, mes: string, anio: string
+
+      if (fechaOverride) {
+        if (!/^\d{8}$/.test(fechaOverride)) {
+          throw new Error('Parámetro "fecha" inválido, formato esperado DDMMYYYY (ej: 14092026)')
+        }
+        dia = fechaOverride.slice(0, 2)
+        mes = fechaOverride.slice(2, 4)
+        anio = fechaOverride.slice(4, 8)
+      } else {
+        dia = partesFecha.find((p) => p.type === 'day')!.value
+        mes = partesFecha.find((p) => p.type === 'month')!.value
+        anio = partesFecha.find((p) => p.type === 'year')!.value
+      }
+
+      fecha = `${dia}${mes}${anio}`
+      const corrida = fechaOverride ? 'prueba-manual' : horaChile < 12 ? 'manana' : 'tarde'
+
+      const urlListado = `https://api.mercadopublico.cl/servicios/v1/publico/licitaciones.json?fecha=${fecha}&estado=publicada&ticket=${ticket}`
       const respListado = await fetch(urlListado)
 
       if (!respListado.ok) {

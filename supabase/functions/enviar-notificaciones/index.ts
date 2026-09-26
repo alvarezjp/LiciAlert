@@ -1,10 +1,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-// Ubicación en el proyecto: supabase/functions/enviar-notificaciones/index.ts
+// Ubicacion en el proyecto: supabase/functions/enviar-notificaciones/index.ts
 //
 // Agrupa las coincidencias pendientes por usuario y manda UN correo y UN
-// WhatsApp por usuario (no uno por licitación), para no saturar al usuario
-// con mensajes separados si hay varias coincidencias el mismo día.
+// WhatsApp por usuario (no uno por licitacion), para no saturar al usuario
+// con mensajes separados si hay varias coincidencias el mismo dia.
 
 function obtenerServiceRoleKey(): string | undefined {
   const secretKeysRaw = Deno.env.get('SUPABASE_SECRET_KEYS')
@@ -22,53 +22,62 @@ function obtenerServiceRoleKey(): string | undefined {
 type Pendiente = {
   user_id: string
   email: string | null
-  telefono_whatsapp: string | null
+  telefono_whatsapp?: string | null
   codigo: string
   nombre: string
   organismo: string | null
   estado: string | null
-  monto_estimado: number | null
-  ya_notificado_email: boolean
-  ya_notificado_whatsapp: boolean
+  fecha_publicacion: string | null
+  fecha_cierre: string | null
+  monto_estimado?: number | null
+  ya_notificado_email?: boolean
+  ya_notificado_whatsapp?: boolean
 }
 
-function formatearMonto(monto: number | null) {
+function formatearMonto(monto: number | null | undefined) {
   if (!monto) return null
   return `$${Number(monto).toLocaleString('es-CL')}`
+}
+
+function formatearFecha(fecha: string | null) {
+  if (!fecha) return null
+  return new Date(fecha).toLocaleDateString('es-CL')
 }
 
 function construirHtmlEmail(licitaciones: Pendiente[], appUrl: string) {
   const items = licitaciones
     .map((l) => {
-      const monto = formatearMonto(l.monto_estimado)
+      const fInicio = formatearFecha(l.fecha_publicacion)
+      const fCierre = formatearFecha(l.fecha_cierre)
       return `
         <li style="margin-bottom: 16px;">
           <strong>${l.nombre}</strong><br/>
           ${l.organismo ?? 'Organismo no disponible'}<br/>
-          Estado: ${l.estado ?? 'Sin información'}${monto ? ` · Monto estimado: ${monto}` : ''}<br/>
-          Código: ${l.codigo}
+          Estado: ${l.estado ?? 'Sin informacion'}<br/>
+          ${fInicio ? `Publicada: ${fInicio}` : ''}${fInicio && fCierre ? ' . ' : ''}${fCierre ? `Cierra: ${fCierre}` : ''}<br/>
+          ID licitacion: ${l.codigo}
         </li>`
     })
     .join('')
 
   return `
     <div style="font-family: sans-serif;">
-      <h2>Nuevas licitaciones que podrían interesarte</h2>
-      <p>Encontramos ${licitaciones.length} licitación(es) nueva(s) que calzan con tus palabras clave:</p>
+      <h2>Nuevas licitaciones que podrian interesarte</h2>
+      <p>Encontramos ${licitaciones.length} licitacion(es) nueva(s) que calzan con tus palabras clave:</p>
       <ul>${items}</ul>
-      <p><a href="${appUrl}">Ver todas en la plataforma →</a></p>
+      <p><a href="${appUrl}">Ver todas en la plataforma -&gt;</a></p>
     </div>`
 }
 
 function construirTextoWhatsapp(licitaciones: Pendiente[], appUrl: string) {
   const primeras = licitaciones.slice(0, 3)
-  const nombres = primeras.map((l) => `• ${l.nombre}`).join('\n')
+  const nombres = primeras.map((l) => `- ${l.nombre}`).join('\n')
   const restantes = licitaciones.length - primeras.length
 
   return (
-    `Tienes ${licitaciones.length} licitación(es) nueva(s) que calzan con tus palabras clave:\n\n` +
+    `Tienes ${licitaciones.length} licitacion(es) nueva(s) que calzan con tus palabras clave:\n\n` +
     nombres +
-    (restantes > 0 ? `\n...y ${restantes} más.` : '') +
+    (restantes > 0 ? `\n...y ${restantes} mas.` : '') +
     `\n\nVer todas: ${appUrl}`
   )
 }
@@ -83,14 +92,14 @@ async function enviarEmail(apiKey: string, from: string, to: string, html: strin
     body: JSON.stringify({
       from,
       to: [to],
-      subject: 'Nuevas licitaciones que podrían interesarte',
+      subject: 'Nuevas licitaciones que podrian interesarte',
       html,
     }),
   })
 
   if (!resp.ok) {
     const detalle = await resp.text()
-    throw new Error(`Resend respondió ${resp.status}: ${detalle}`)
+    throw new Error(`Resend respondio ${resp.status}: ${detalle}`)
   }
 }
 
@@ -122,7 +131,7 @@ async function enviarWhatsapp(
 
   if (!resp.ok) {
     const detalle = await resp.text()
-    throw new Error(`Twilio respondió ${resp.status}: ${detalle}`)
+    throw new Error(`Twilio respondio ${resp.status}: ${detalle}`)
   }
 }
 
@@ -156,17 +165,20 @@ Deno.serve(async (_req) => {
 
   const filas = (pendientes ?? []) as Pendiente[]
 
-  // Agrupamos por usuario, separando qué le falta por email y qué por whatsapp
-  const porUsuario = new Map<
-    string,
-    { email: string | null; telefono: string | null; faltanEmail: Pendiente[]; faltanWhatsapp: Pendiente[] }
-  >()
+  type GrupoUsuario = {
+    email: string | null
+    telefono: string | null
+    faltanEmail: Pendiente[]
+    faltanWhatsapp: Pendiente[]
+  }
+
+  const porUsuario = new Map<string, GrupoUsuario>()
 
   for (const fila of filas) {
     if (!porUsuario.has(fila.user_id)) {
       porUsuario.set(fila.user_id, {
         email: fila.email,
-        telefono: fila.telefono_whatsapp,
+        telefono: fila.telefono_whatsapp ?? null,
         faltanEmail: [],
         faltanWhatsapp: [],
       })
