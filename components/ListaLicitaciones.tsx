@@ -14,14 +14,15 @@ type Licitacion = {
   estado_usuario: 'nueva' | 'vista' | 'postulada'
 }
 
-// Evita el bug de "un día menos": parseamos los componentes y armamos la fecha
-// en hora LOCAL, sin pasar por UTC.
+// Evita el bug de "un día menos": parseamos en hora LOCAL
 function formatearFechaLocal(fechaISO: string) {
   const [anio, mes, dia] = fechaISO.slice(0, 10).split('-').map(Number)
-  return new Date(anio, mes - 1, dia).toLocaleDateString('es-CL')
+  return new Date(anio, mes - 1, dia).toLocaleDateString('es-CL', {
+    day: 'numeric',
+    month: 'short',
+  })
 }
 
-// Calcula cuántos días quedan hasta el cierre (puede ser negativo)
 function diasHastaCierre(fechaISO: string): number {
   const [anio, mes, dia] = fechaISO.slice(0, 10).split('-').map(Number)
   const cierre = new Date(anio, mes - 1, dia).getTime()
@@ -31,24 +32,45 @@ function diasHastaCierre(fechaISO: string): number {
 const URL_BASE_MERCADO_PUBLICO =
   'http://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion='
 
-/* ── Badge de estado usuario ── */
+/* ── Badge estado usuario (esquina superior derecha de la card) ── */
 function BadgeEstadoUsuario({ estado }: { estado: Licitacion['estado_usuario'] }) {
   const config = {
-    nueva:     { label: 'Nueva',     cls: 'lic-badge--nueva' },
-    vista:     { label: 'Vista',     cls: 'lic-badge--vista' },
-    postulada: { label: 'Postulada', cls: 'lic-badge--postulada' },
+    nueva: {
+      label: 'Nueva',
+      dot: 'bg-[#38bdf8]',
+      className: 'bg-[#e0f7ff] text-[#0891b2] border border-[#38bdf8]/40',
+    },
+    vista: {
+      label: 'Vista',
+      dot: 'bg-slate-400',
+      className: 'bg-slate-100 text-slate-500 border border-slate-200',
+    },
+    postulada: {
+      label: 'Postulada',
+      dot: 'bg-emerald-500',
+      className: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+    },
   }
-  const { label, cls } = config[estado] ?? config.nueva
-  return <span className={`lic-badge ${cls}`}>{label}</span>
+  const { label, dot, className } = config[estado] ?? config.nueva
+  return (
+    <span className={`inline-flex items-center gap-1.5 shrink-0 px-3 py-1 rounded-full text-xs font-semibold ${className}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
+      {label}
+    </span>
+  )
 }
 
-/* ── Badge de días restantes ── */
-function BadgeCierre({ fechaISO }: { fechaISO: string }) {
+/* ── Texto de cierre con color según urgencia ── */
+function TextoCierre({ fechaISO }: { fechaISO: string }) {
   const dias = diasHastaCierre(fechaISO)
-  if (dias < 0) return <span className="lic-badge-cierre lic-badge-cierre--vencida">Cerrada</span>
-  if (dias === 0) return <span className="lic-badge-cierre lic-badge-cierre--hoy">Cierra hoy</span>
-  if (dias <= 3) return <span className="lic-badge-cierre lic-badge-cierre--urgente">Cierra en {dias}d</span>
-  return <span className="lic-badge-cierre lic-badge-cierre--ok">Cierra en {dias}d</span>
+
+  if (dias < 0)
+    return <span className="text-slate-400">Cerrada</span>
+  if (dias === 0)
+    return <span className="font-semibold text-red-500">Cierra hoy</span>
+  if (dias <= 3)
+    return <span className="font-semibold text-orange-500">Cierra en {dias} días</span>
+  return <span className="text-slate-500">Cierra en {dias} días</span>
 }
 
 export default function ListaLicitaciones({
@@ -81,286 +103,153 @@ export default function ListaLicitaciones({
   }
 
   const verDetalle = async (lic: Licitacion) => {
-    // Abrir la pestaña ANTES del await — los navegadores bloquean popups
-    // que se abren después de operaciones asíncronas.
+    // Abrir la pestaña ANTES del await — los navegadores bloquean popups asincrónicos
     window.open(URL_BASE_MERCADO_PUBLICO + encodeURIComponent(lic.codigo), '_blank')
-
     if (lic.estado_usuario === 'nueva') {
       await marcarEstado(lic.codigo, 'vista')
     }
   }
 
+  /* ── Estado vacío ── */
   if (licitaciones.length === 0) {
     return (
-      <div className="lic-empty">
-        <div className="lic-empty-icon" aria-hidden="true">
-          <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-            <circle cx="18" cy="18" r="16" stroke="rgba(99,180,255,0.2)" strokeWidth="1.5"/>
-            <path d="M12 18h12M18 12v12" stroke="rgba(99,180,255,0.3)" strokeWidth="1.5" strokeLinecap="round"/>
+      <div className="flex flex-col items-center py-20 text-center gap-3">
+        <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center mb-2" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke="#94a3b8" strokeWidth="1.5" strokeLinejoin="round" />
           </svg>
         </div>
-        <p className="lic-empty-title">Sin resultados todavía</p>
-        <p className="lic-empty-body">
+        <p className="text-base font-semibold text-slate-800">Sin resultados todavía</p>
+        <p className="text-sm text-slate-500">
           Agrega o revisa tus{' '}
-          <a href="/keywords" className="lic-link">palabras clave</a>.
+          <a href="/keywords" className="text-[#0891b2] hover:underline font-medium">
+            palabras clave
+          </a>
+          .
         </p>
       </div>
     )
   }
 
   return (
-    <>
-      <ul className="lic-list">
-        {licitaciones.map((lic) => (
-          <li key={lic.codigo} className={`lic-card${lic.estado_usuario === 'nueva' ? ' lic-card--nueva' : ''}`}>
+    <ul className="flex flex-col gap-3">
+      {licitaciones.map((lic) => (
+        <li
+          key={lic.codigo}
+          className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow duration-200 px-6 py-5"
+        >
+          {/* Cabecera: nombre + badge estado */}
+          <div className="flex justify-between items-start gap-4 mb-2">
+            <h3 className="text-base font-bold text-slate-900 leading-snug flex-1 uppercase tracking-wide">
+              {lic.nombre}
+            </h3>
+            <BadgeEstadoUsuario estado={lic.estado_usuario} />
+          </div>
 
-            {/* Cabecera de la card */}
-            <div className="lic-card-header">
-              <h3 className="lic-nombre">{lic.nombre}</h3>
-              <BadgeEstadoUsuario estado={lic.estado_usuario} />
-            </div>
+          {/* Organismo */}
+          <p className="flex items-center gap-1.5 text-sm text-slate-500 mb-3">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" className="shrink-0 text-slate-400" aria-hidden="true">
+              <rect x="1" y="6" width="14" height="9" rx="1" stroke="currentColor" strokeWidth="1.3" />
+              <path d="M5 6V4a3 3 0 016 0v2" stroke="currentColor" strokeWidth="1.3" />
+              <path d="M8 10v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            </svg>
+            {lic.organismo ?? 'Organismo no disponible'}
+          </p>
 
-            {/* Organismo */}
-            <p className="lic-organismo">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <rect x="1" y="6" width="14" height="9" rx="1" stroke="currentColor" strokeWidth="1.3"/>
-                <path d="M5 6V4a3 3 0 016 0v2" stroke="currentColor" strokeWidth="1.3"/>
-                <path d="M8 10v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+          {/* Fila de metadatos: ID · publicada · cierre · monto · días restantes */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 mb-4">
+
+            <span className="font-mono text-slate-400">{lic.codigo}</span>
+
+            {lic.fecha_publicacion && (
+              <span>
+                Publicada {formatearFechaLocal(lic.fecha_publicacion)}
+              </span>
+            )}
+
+            {lic.fecha_cierre && (
+              <span>
+                Cierre {formatearFechaLocal(lic.fecha_cierre)}
+              </span>
+            )}
+
+            {lic.monto_estimado && (
+              <span className="flex items-center gap-1">
+                <span className="text-slate-400">$</span>
+                <span className="text-slate-600 font-medium">
+                  {Number(lic.monto_estimado).toLocaleString('es-CL')}
+                </span>
+              </span>
+            )}
+
+            {lic.fecha_cierre && (
+              <TextoCierre fechaISO={lic.fecha_cierre} />
+            )}
+          </div>
+
+          {/* Acciones */}
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Botón principal */}
+            <button
+              onClick={() => verDetalle(lic)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#0d1b2e] hover:bg-[#1a3a5c] text-white text-sm font-medium transition-colors"
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M7 3H3a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1V9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                <path d="M10 2h4v4M14 2L8 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              {lic.organismo ?? 'Organismo no disponible'}
-            </p>
+              Ver en Mercado Público
+            </button>
 
-            {/* Meta: estado licitación + monto */}
-            <div className="lic-meta">
-              {lic.estado && (
-                <span className="lic-meta-item">
-                  Estado: <strong>{lic.estado}</strong>
-                </span>
-              )}
-              {lic.monto_estimado && (
-                <span className="lic-meta-item">
-                  Monto: <strong>${Number(lic.monto_estimado).toLocaleString('es-CL')}</strong>
-                </span>
-              )}
-            </div>
-
-            {/* Fechas + código */}
-            <div className="lic-fechas">
-              <span className="lic-codigo">{lic.codigo}</span>
-              {lic.fecha_publicacion && (
-                <span>Publicada: {formatearFechaLocal(lic.fecha_publicacion)}</span>
-              )}
-              {lic.fecha_cierre && (
-                <>
-                  <span>Cierre: {formatearFechaLocal(lic.fecha_cierre)}</span>
-                  <BadgeCierre fechaISO={lic.fecha_cierre} />
-                </>
-              )}
-            </div>
-
-            {/* Acciones */}
-            <div className="lic-acciones">
-              <button
-                className="lic-btn lic-btn--primary"
-                onClick={() => verDetalle(lic)}
-              >
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                  <path d="M7 3H3a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1V9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-                  <path d="M10 2h4v4M14 2L8 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+            {/* Acción Vista — estilo inline con ícono */}
+            <button
+              onClick={() => marcarEstado(lic.codigo, 'vista')}
+              disabled={lic.estado_usuario === 'vista' || lic.estado_usuario === 'postulada'}
+              className={`inline-flex items-center gap-1.5 text-sm transition-colors disabled:cursor-not-allowed ${
+                lic.estado_usuario === 'vista' || lic.estado_usuario === 'postulada'
+                  ? 'text-slate-400'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {lic.estado_usuario === 'vista' || lic.estado_usuario === 'postulada' ? (
+                /* ícono ojo tachado cuando ya está vista */
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <circle cx="8" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.3" />
+                  <path d="M1.5 8C3 4.5 5 3 8 3s5 1.5 6.5 5c-1.5 3.5-3.5 5-6.5 5s-5-1.5-6.5-5z" stroke="currentColor" strokeWidth="1.3" />
                 </svg>
-                Ver en Mercado Público
-              </button>
-              <button
-                className="lic-btn lic-btn--secondary"
-                onClick={() => marcarEstado(lic.codigo, 'vista')}
-                disabled={lic.estado_usuario === 'vista' || lic.estado_usuario === 'postulada'}
-              >
-                Marcar vista
-              </button>
-              <button
-                className="lic-btn lic-btn--success"
-                onClick={() => marcarEstado(lic.codigo, 'postulada')}
-                disabled={lic.estado_usuario === 'postulada'}
-              >
-                Postulada
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
+              ) : (
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <circle cx="8" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.3" />
+                  <path d="M1.5 8C3 4.5 5 3 8 3s5 1.5 6.5 5c-1.5 3.5-3.5 5-6.5 5s-5-1.5-6.5-5z" stroke="currentColor" strokeWidth="1.3" />
+                </svg>
+              )}
+              Vista
+            </button>
 
-      <style>{`
-        /* ── Lista ── */
-        .lic-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 12px; }
-
-        /* ── Card ── */
-        .lic-card {
-          border-radius: 14px;
-          padding: 18px 20px;
-          background: rgba(8, 22, 42, 0.72);
-          border: 1px solid rgba(99, 180, 255, 0.1);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
-          transition: border-color 0.2s, box-shadow 0.2s;
-        }
-        .lic-card:hover {
-          border-color: rgba(56, 189, 248, 0.22);
-          box-shadow: 0 4px 32px rgba(0, 80, 160, 0.2);
-        }
-        /* Borde izquierdo para licitaciones nuevas */
-        .lic-card--nueva {
-          border-left: 3px solid rgba(56, 189, 248, 0.6);
-        }
-
-        /* ── Cabecera ── */
-        .lic-card-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          gap: 12px;
-          margin-bottom: 10px;
-        }
-        .lic-nombre {
-          font-size: 0.95rem;
-          font-weight: 600;
-          color: #d6eaf8;
-          line-height: 1.45;
-          flex: 1;
-        }
-
-        /* ── Badges estado usuario ── */
-        .lic-badge {
-          flex-shrink: 0;
-          padding: 3px 10px;
-          border-radius: 999px;
-          font-size: 0.72rem;
-          font-weight: 600;
-          letter-spacing: 0.04em;
-        }
-        .lic-badge--nueva {
-          background: rgba(56, 189, 248, 0.12);
-          color: #38bdf8;
-          border: 1px solid rgba(56, 189, 248, 0.25);
-        }
-        .lic-badge--vista {
-          background: rgba(148, 163, 184, 0.1);
-          color: #94a3b8;
-          border: 1px solid rgba(148,163,184,0.2);
-        }
-        .lic-badge--postulada {
-          background: rgba(34, 197, 94, 0.1);
-          color: #4ade80;
-          border: 1px solid rgba(34,197,94,0.25);
-        }
-
-        /* ── Badge cierre ── */
-        .lic-badge-cierre {
-          font-size: 0.68rem;
-          font-weight: 600;
-          padding: 2px 8px;
-          border-radius: 999px;
-        }
-        .lic-badge-cierre--ok      { background: rgba(34,197,94,0.1);   color: #4ade80; border: 1px solid rgba(34,197,94,0.2); }
-        .lic-badge-cierre--urgente { background: rgba(251,146,60,0.12);  color: #fb923c; border: 1px solid rgba(251,146,60,0.25); }
-        .lic-badge-cierre--hoy     { background: rgba(239,68,68,0.12);   color: #f87171; border: 1px solid rgba(239,68,68,0.25); }
-        .lic-badge-cierre--vencida { background: rgba(100,116,139,0.1);  color: #64748b; border: 1px solid rgba(100,116,139,0.2); }
-
-        /* ── Organismo ── */
-        .lic-organismo {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          font-size: 0.82rem;
-          color: #6ab3d8;
-          margin-bottom: 8px;
-        }
-
-        /* ── Meta ── */
-        .lic-meta {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 16px;
-          margin-bottom: 8px;
-        }
-        .lic-meta-item {
-          font-size: 0.82rem;
-          color: #7fb8d6;
-        }
-        .lic-meta-item strong { color: #c8e6f5; }
-
-        /* ── Fechas ── */
-        .lic-fechas {
-          display: flex;
-          flex-wrap: wrap;
-          align-items: center;
-          gap: 10px;
-          font-size: 0.75rem;
-          color: #4a7a99;
-          margin-bottom: 14px;
-        }
-        .lic-codigo {
-          font-family: 'Courier New', monospace;
-          font-size: 0.7rem;
-          background: rgba(99,180,255,0.06);
-          border: 1px solid rgba(99,180,255,0.1);
-          padding: 1px 7px;
-          border-radius: 4px;
-          color: #5a9abf;
-        }
-
-        /* ── Acciones ── */
-        .lic-acciones {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-        }
-        .lic-btn {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          padding: 7px 14px;
-          border-radius: 8px;
-          border: 1px solid transparent;
-          font-size: 0.78rem;
-          font-weight: 500;
-          cursor: pointer;
-          transition: opacity 0.2s, transform 0.15s;
-        }
-        .lic-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-        .lic-btn:not(:disabled):hover { opacity: 0.85; transform: translateY(-1px); }
-        .lic-btn:not(:disabled):active { transform: translateY(0); }
-
-        .lic-btn--primary {
-          background: linear-gradient(135deg, #1565c0, #1e88e5);
-          color: #fff;
-          box-shadow: 0 2px 12px rgba(21,101,192,0.35);
-        }
-        .lic-btn--secondary {
-          background: rgba(99,180,255,0.07);
-          color: #7fb8d6;
-          border-color: rgba(99,180,255,0.15);
-        }
-        .lic-btn--success {
-          background: rgba(34,197,94,0.1);
-          color: #4ade80;
-          border-color: rgba(34,197,94,0.2);
-        }
-
-        /* ── Estado vacío ── */
-        .lic-empty {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          padding: 60px 20px;
-          text-align: center;
-          gap: 10px;
-        }
-        .lic-empty-icon { opacity: 0.6; margin-bottom: 4px; }
-        .lic-empty-title { font-size: 1rem; color: #d6eaf8; font-weight: 600; }
-        .lic-empty-body  { font-size: 0.85rem; color: #4a7a99; }
-        .lic-link { color: #38bdf8; text-decoration: none; }
-        .lic-link:hover { text-decoration: underline; }
-      `}</style>
-    </>
+            {/* Acción Postulada */}
+            <button
+              onClick={() => marcarEstado(lic.codigo, 'postulada')}
+              disabled={lic.estado_usuario === 'postulada'}
+              className={`inline-flex items-center gap-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed ${
+                lic.estado_usuario === 'postulada'
+                  ? 'text-emerald-600'
+                  : 'text-slate-500 hover:text-emerald-600'
+              }`}
+            >
+              {lic.estado_usuario === 'postulada' ? (
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M2.5 8.5l4 4 7-8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              )}
+              Postulada
+            </button>
+          </div>
+        </li>
+      ))}
+    </ul>
   )
 }

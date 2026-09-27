@@ -15,9 +15,7 @@ export default async function HomePage({
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user) {
-    redirect('/login')
-  }
+  if (!user) redirect('/login')
 
   const { data: perfil, error } = await supabase
     .from('perfiles')
@@ -28,16 +26,13 @@ export default async function HomePage({
   /* ── Error de perfil ── */
   if (error || !perfil) {
     return (
-      <div className="mp-root">
-        <div className="mp-bg">
-          <div className="mp-blob mp-blob-1" />
-          <div className="mp-blob mp-blob-2" />
+      <div className="min-h-screen bg-[#f0f4f8] flex items-center justify-center px-4">
+        <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl p-8 text-center shadow-sm">
+          <h1 className="text-xl font-bold text-slate-900 mb-3">No pudimos cargar tu perfil</h1>
+          <p className="text-slate-500 text-sm leading-relaxed">
+            Intenta recargar la página. Si el problema persiste, contáctanos.
+          </p>
         </div>
-        <div className="mp-error-card">
-          <h1 className="mp-error-title">No pudimos cargar tu perfil</h1>
-          <p className="mp-error-body">Intenta recargar la página. Si el problema persiste, contáctanos.</p>
-        </div>
-        <GlobalStyles />
       </div>
     )
   }
@@ -47,17 +42,13 @@ export default async function HomePage({
   /* ── Trial vencido / cuenta inactiva ── */
   if (trialVencido || !perfil.activo) {
     return (
-      <div className="mp-root">
-        <div className="mp-bg">
-          <div className="mp-blob mp-blob-1" />
-          <div className="mp-blob mp-blob-2" />
-        </div>
-        <div className="mp-expired-card">
-          <div className="mp-expired-icon" aria-hidden="true">🔒</div>
-          <h1 className="mp-expired-title">Tu período de prueba terminó</h1>
-          <p className="mp-expired-body">
+      <div className="min-h-screen bg-[#f0f4f8] flex items-center justify-center px-4">
+        <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl p-8 text-center shadow-sm">
+          <div className="text-4xl mb-4" aria-hidden="true">🔒</div>
+          <h1 className="text-xl font-bold text-slate-900 mb-3">Tu período de prueba terminó</h1>
+          <p className="text-slate-500 text-sm leading-relaxed mb-6">
             Tu prueba gratuita finalizó el{' '}
-            <strong>
+            <strong className="text-slate-800">
               {new Date(perfil.trial_fin).toLocaleDateString('es-CL', {
                 day: 'numeric',
                 month: 'long',
@@ -68,7 +59,6 @@ export default async function HomePage({
           </p>
           <LogoutButton />
         </div>
-        <GlobalStyles />
       </div>
     )
   }
@@ -85,83 +75,99 @@ export default async function HomePage({
   const licitaciones = [...(licitacionesData ?? [])]
   if (orden === 'recientes') {
     licitaciones.sort(
-      (a, b) => new Date(b.fecha_publicacion).getTime() - new Date(a.fecha_publicacion).getTime()
+      (a, b) =>
+        new Date(b.fecha_publicacion).getTime() - new Date(a.fecha_publicacion).getTime()
     )
   }
 
-  return (
-    <div className="mp-root">
-      {/* Fondo */}
-      <div className="mp-bg">
-        <div className="mp-blob mp-blob-1" />
-        <div className="mp-blob mp-blob-2" />
-        <div className="mp-blob mp-blob-3" />
-      </div>
+  const totalNuevas = licitaciones.filter((l) => l.estado_usuario === 'nueva').length
 
-      {/* Navbar */}
-      <header className="mp-navbar">
-        <div className="mp-navbar-inner">
-          <div className="mp-brand">
-            {/* Ícono escudo */}
-            <div className="mp-nav-icon">
-              <svg width="20" height="20" viewBox="0 0 38 38" fill="none" aria-hidden="true">
-                <path d="M19 3L34 10V21C34 28.18 27.39 34.46 19 36C10.61 34.46 4 28.18 4 21V10L19 3Z"
-                  fill="url(#nav-shield)" />
-                <path d="M19 10C19 10 13 15.5 13 20.5C13 23.54 15.69 26 19 26C22.31 26 25 23.54 25 20.5C25 15.5 19 10 19 10Z"
-                  fill="rgba(99,210,255,0.9)" />
-                <defs>
-                  <linearGradient id="nav-shield" x1="4" y1="3" x2="34" y2="36" gradientUnits="userSpaceOnUse">
-                    <stop offset="0%" stopColor="#1a3a5c" />
-                    <stop offset="100%" stopColor="#0d2340" />
-                  </linearGradient>
-                </defs>
+  return (
+    <div className="min-h-screen bg-[#f0f4f8] font-sans">
+
+      {/* ── Navbar azul marino ── */}
+      <header className="bg-[#0d1b2e] sticky top-0 z-50">
+        <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
+
+          {/* Brand */}
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-[#1e6fb5] flex items-center justify-center shrink-0">
+              <svg width="16" height="16" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+                <rect x="2" y="3" width="18" height="16" rx="2.5" stroke="white" strokeWidth="1.6" />
+                <path d="M6 8h10M6 11h7M6 14h5" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
               </svg>
             </div>
-            <span className="mp-nav-title">MercaLerta</span>
+            <span className="text-white font-bold text-base tracking-tight">LicitaAlerta</span>
           </div>
 
-          <nav className="mp-nav-links">
-            <a href="/keywords" className="mp-nav-link">
-              {/* Ícono etiqueta */}
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M2 2h6l6 6-6 6-6-6V2z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
-                <circle cx="5.5" cy="5.5" r="1" fill="currentColor"/>
+          {/* Nav */}
+          <nav className="flex items-center gap-1">
+            <a
+              href="/keywords"
+              className="flex flex-col items-center px-4 py-1 text-[#94bcd8] hover:text-white transition-colors text-sm"
+            >
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" className="mb-0.5" aria-hidden="true">
+                <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.4" />
+                <path d="M10.5 10.5l3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               </svg>
-              Palabras clave
+              Palabras<br />clave
             </a>
+            <div className="w-px h-8 bg-white/10 mx-1" />
             <LogoutButton />
           </nav>
         </div>
       </header>
 
-      {/* Contenido principal */}
-      <main className="mp-main">
+      {/* ── Contenido ── */}
+      <main className="max-w-5xl mx-auto px-6 py-8 pb-16">
 
         {/* Banner trial */}
         {perfil.plan === 'trial' && (
-          <div className="mp-trial-banner">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4"/>
-              <path d="M8 5v3.5M8 10.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+          <div className="flex items-center gap-2.5 bg-white border border-slate-200 rounded-xl px-4 py-3 mb-6 text-sm text-slate-600 shadow-sm">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" className="shrink-0 text-slate-400" aria-hidden="true">
+              <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4" />
+              <path d="M8 5v3.5M8 10.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
             </svg>
-            Período de prueba · Te quedan <strong>{diasRestantes}</strong> día{diasRestantes !== 1 ? 's' : ''}
+            Estás en período de prueba. Te quedan{' '}
+            <strong className="text-slate-900">{diasRestantes}</strong>{' '}
+            día{diasRestantes !== 1 ? 's' : ''}.
           </div>
         )}
 
         {/* Cabecera sección */}
-        <div className="mp-section-header">
-          <div className="mp-section-title-wrap">
-            <h2 className="mp-section-title">Licitaciones activas</h2>
-            <span className="mp-section-count">{licitaciones.length} resultado{licitaciones.length !== 1 ? 's' : ''}</span>
+        <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Licitaciones</h1>
+            <p className="text-slate-500 text-sm mt-1 flex items-center gap-2">
+              Resultados que coinciden con tus palabras clave
+              {totalNuevas > 0 && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#38bdf8]/15 text-[#0891b2] border border-[#38bdf8]/30">
+                  {totalNuevas} nueva{totalNuevas !== 1 ? 's' : ''}
+                </span>
+              )}
+            </p>
           </div>
 
           {/* Ordenamiento */}
-          <div className="mp-sort">
-            <span className="mp-sort-label">Ordenar:</span>
-            <a href="/" className={`mp-sort-btn${orden !== 'recientes' ? ' mp-sort-btn--active' : ''}`}>
+          <div className="flex items-center gap-2 self-center">
+            <a
+              href="/"
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
+                orden !== 'recientes'
+                  ? 'bg-[#0d1b2e] text-white border-[#0d1b2e]'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
               Relevancia
             </a>
-            <a href="/?orden=recientes" className={`mp-sort-btn${orden === 'recientes' ? ' mp-sort-btn--active' : ''}`}>
+            <a
+              href="/?orden=recientes"
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
+                orden === 'recientes'
+                  ? 'bg-[#0d1b2e] text-white border-[#0d1b2e]'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
               Más recientes
             </a>
           </div>
@@ -169,10 +175,10 @@ export default async function HomePage({
 
         {/* Error de carga */}
         {errorLicitaciones && (
-          <div className="mp-load-error">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <circle cx="8" cy="8" r="6.5" stroke="#f87171" strokeWidth="1.4"/>
-              <path d="M8 5v3.5M8 10.5v.5" stroke="#f87171" strokeWidth="1.4" strokeLinecap="round"/>
+          <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-600 mb-4">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0" aria-hidden="true">
+              <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4" />
+              <path d="M8 5v3.5M8 10.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
             </svg>
             No se pudieron cargar las licitaciones: {errorLicitaciones.message}
           </div>
@@ -182,235 +188,6 @@ export default async function HomePage({
           <ListaLicitaciones licitaciones={licitaciones} userId={user.id} />
         )}
       </main>
-
-      <GlobalStyles />
     </div>
-  )
-}
-
-/* Estilos globales inyectados como Server Component */
-function GlobalStyles() {
-  return (
-    <style>{`
-      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-      /* ── Root ── */
-      .mp-root {
-        min-height: 100vh;
-        background: #050f1e;
-        position: relative;
-        font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
-        color: #d6eaf8;
-      }
-
-      /* ── Blobs de fondo ── */
-      .mp-bg { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
-      .mp-blob {
-        position: absolute;
-        border-radius: 50%;
-        filter: blur(90px);
-        opacity: 0.28;
-      }
-      .mp-blob-1 {
-        width: 600px; height: 600px;
-        background: radial-gradient(circle, #0a4f8a 0%, transparent 70%);
-        top: -180px; left: -140px;
-      }
-      .mp-blob-2 {
-        width: 450px; height: 450px;
-        background: radial-gradient(circle, #063560 0%, transparent 70%);
-        bottom: -100px; right: -80px;
-      }
-      .mp-blob-3 {
-        width: 300px; height: 300px;
-        background: radial-gradient(circle, #005fa3 0%, transparent 70%);
-        top: 45%; left: 60%;
-        transform: translate(-50%, -50%);
-      }
-
-      /* ── Navbar ── */
-      .mp-navbar {
-        position: sticky;
-        top: 0;
-        z-index: 100;
-        background: rgba(5, 15, 30, 0.85);
-        border-bottom: 1px solid rgba(99, 180, 255, 0.1);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-      }
-      .mp-navbar-inner {
-        max-width: 900px;
-        margin: 0 auto;
-        padding: 0 20px;
-        height: 58px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-      }
-      .mp-brand {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
-      .mp-nav-icon {
-        width: 32px; height: 32px;
-        border-radius: 8px;
-        background: linear-gradient(135deg, #0d2340 0%, #0a3a6e 100%);
-        border: 1px solid rgba(99,210,255,0.2);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      .mp-nav-title {
-        font-size: 1rem;
-        font-weight: 700;
-        color: #e8f4ff;
-        letter-spacing: -0.01em;
-      }
-      .mp-nav-links {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .mp-nav-link {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 6px 14px;
-        border-radius: 8px;
-        font-size: 0.82rem;
-        font-weight: 500;
-        color: #7fb8d6;
-        text-decoration: none;
-        border: 1px solid rgba(99,180,255,0.1);
-        transition: background 0.2s, color 0.2s;
-      }
-      .mp-nav-link:hover {
-        background: rgba(99,180,255,0.07);
-        color: #c8e6f5;
-      }
-
-      /* ── Main ── */
-      .mp-main {
-        position: relative;
-        z-index: 1;
-        max-width: 900px;
-        margin: 0 auto;
-        padding: 28px 20px 60px;
-      }
-
-      /* ── Trial banner ── */
-      .mp-trial-banner {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        background: rgba(21, 101, 192, 0.15);
-        border: 1px solid rgba(56, 189, 248, 0.2);
-        border-radius: 10px;
-        padding: 10px 16px;
-        font-size: 0.82rem;
-        color: #7ec8e3;
-        margin-bottom: 24px;
-      }
-      .mp-trial-banner strong { color: #38bdf8; }
-
-      /* ── Cabecera sección ── */
-      .mp-section-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        flex-wrap: wrap;
-        gap: 12px;
-        margin-bottom: 20px;
-      }
-      .mp-section-title-wrap {
-        display: flex;
-        align-items: baseline;
-        gap: 10px;
-      }
-      .mp-section-title {
-        font-size: 1.15rem;
-        font-weight: 600;
-        color: #e8f4ff;
-        letter-spacing: -0.01em;
-      }
-      .mp-section-count {
-        font-size: 0.75rem;
-        color: #4a7a99;
-        background: rgba(99,180,255,0.07);
-        border: 1px solid rgba(99,180,255,0.12);
-        padding: 2px 8px;
-        border-radius: 999px;
-      }
-
-      /* ── Ordenamiento ── */
-      .mp-sort {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-      }
-      .mp-sort-label {
-        font-size: 0.78rem;
-        color: #4a7a99;
-      }
-      .mp-sort-btn {
-        font-size: 0.78rem;
-        padding: 4px 12px;
-        border-radius: 6px;
-        border: 1px solid rgba(99,180,255,0.1);
-        color: #6ab3d8;
-        text-decoration: none;
-        transition: background 0.2s, color 0.2s;
-      }
-      .mp-sort-btn:hover { background: rgba(99,180,255,0.07); }
-      .mp-sort-btn--active {
-        background: rgba(21,101,192,0.2);
-        border-color: rgba(56,189,248,0.3);
-        color: #38bdf8;
-        font-weight: 600;
-      }
-
-      /* ── Error carga ── */
-      .mp-load-error {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        background: rgba(220, 38, 38, 0.1);
-        border: 1px solid rgba(248,113,113,0.2);
-        border-radius: 10px;
-        padding: 12px 16px;
-        color: #fca5a5;
-        font-size: 0.85rem;
-      }
-
-      /* ── Error/Expirado cards ── */
-      .mp-error-card, .mp-expired-card {
-        position: relative;
-        z-index: 10;
-        max-width: 420px;
-        margin: 100px auto;
-        padding: 2rem;
-        border-radius: 20px;
-        background: rgba(8, 22, 42, 0.78);
-        border: 1px solid rgba(99,180,255,0.12);
-        backdrop-filter: blur(24px);
-        -webkit-backdrop-filter: blur(24px);
-        box-shadow: 0 24px 64px rgba(0,0,0,0.55);
-        text-align: center;
-      }
-      .mp-expired-icon { font-size: 2.5rem; margin-bottom: 1rem; }
-      .mp-error-title, .mp-expired-title {
-        font-size: 1.25rem;
-        font-weight: 700;
-        color: #e8f4ff;
-        margin-bottom: 0.75rem;
-      }
-      .mp-error-body, .mp-expired-body {
-        font-size: 0.88rem;
-        color: #7fb8d6;
-        line-height: 1.6;
-      }
-      .mp-expired-body strong { color: #d6eaf8; }
-    `}</style>
   )
 }

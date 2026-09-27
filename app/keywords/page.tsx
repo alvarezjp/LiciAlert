@@ -88,467 +88,181 @@ export default function KeywordsPage() {
   }
 
   return (
-    <div className="kw-root">
-      {/* Fondo con blobs */}
-      <div className="kw-bg">
-        <div className="kw-blob kw-blob-1" />
-        <div className="kw-blob kw-blob-2" />
-        <div className="kw-blob kw-blob-3" />
-      </div>
+    <div className="min-h-screen bg-[#f0f4f8] font-sans">
 
-      {/* Navbar — idéntica a la página principal */}
-      <header className="mp-navbar">
-        <div className="mp-navbar-inner">
-          <div className="mp-brand">
-            <div className="mp-nav-icon">
-              <svg width="20" height="20" viewBox="0 0 38 38" fill="none" aria-hidden="true">
-                <path
-                  d="M19 3L34 10V21C34 28.18 27.39 34.46 19 36C10.61 34.46 4 28.18 4 21V10L19 3Z"
-                  fill="url(#kw-shield)"
-                />
-                <path
-                  d="M19 10C19 10 13 15.5 13 20.5C13 23.54 15.69 26 19 26C22.31 26 25 23.54 25 20.5C25 15.5 19 10 19 10Z"
-                  fill="rgba(99,210,255,0.9)"
-                />
-                <defs>
-                  <linearGradient id="kw-shield" x1="4" y1="3" x2="34" y2="36" gradientUnits="userSpaceOnUse">
-                    <stop offset="0%" stopColor="#1a3a5c" />
-                    <stop offset="100%" stopColor="#0d2340" />
-                  </linearGradient>
-                </defs>
+      {/* ── Navbar azul marino ── */}
+      <header className="bg-[#0d1b2e] sticky top-0 z-50">
+        <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
+
+          {/* Brand */}
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-[#1e6fb5] flex items-center justify-center shrink-0">
+              <svg width="16" height="16" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+                <rect x="2" y="3" width="18" height="16" rx="2.5" stroke="white" strokeWidth="1.6" />
+                <path d="M6 8h10M6 11h7M6 14h5" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
               </svg>
             </div>
-            <a href="/" className="mp-nav-title" style={{ textDecoration: 'none' }}>MercaLerta</a>
+            <span className="text-white font-bold text-base tracking-tight">LicitaAlerta</span>
           </div>
 
-          <nav className="mp-nav-links">
-            <a href="/" className="mp-nav-link">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M2 8L8 2l6 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M4 6v7h3v-3h2v3h3V6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              Inicio
-            </a>
-          </nav>
+          {/* Volver al inicio */}
+          <a
+            href="/"
+            className="flex items-center gap-1.5 text-[#94bcd8] hover:text-white transition-colors text-sm"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Volver al inicio
+          </a>
         </div>
       </header>
 
-      {/* Contenido */}
-      <main className="kw-main">
+      {/* ── Contenido ── */}
+      <main className="max-w-2xl mx-auto px-6 py-10 pb-20">
 
-        {/* Cabecera de sección */}
-        <div className="kw-section-header">
-          <div className="kw-title-wrap">
-            <h2 className="kw-title">Palabras clave</h2>
-            {!cargando && (
-              <span className="kw-count">
-                {keywords.length} activa{keywords.length !== 1 ? 's' : ''}
-              </span>
-            )}
-          </div>
-          <p className="kw-description">
-            Las licitaciones se filtran buscando estas palabras en su nombre y descripción.
+        {/* Título fuera de la card */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight mb-1">
+            Mis palabras clave
+          </h1>
+          <p className="text-slate-500 text-sm leading-relaxed">
+            Las licitaciones cuyo nombre contenga alguna de estas palabras aparecerán en tu
+            panel.
           </p>
         </div>
 
-        {/* Formulario agregar */}
-        <form onSubmit={agregarKeyword} className="kw-form">
-          <div className="kw-input-wrap">
-            <svg className="kw-input-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.4"/>
-              <path d="M10 10l4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-            </svg>
-            <input
-              type="text"
-              value={nueva}
-              onChange={(e) => setNueva(e.target.value)}
-              placeholder="Ej: informática, aseo, construcción…"
-              className="kw-input"
-              disabled={guardando}
-            />
-          </div>
-          <button type="submit" disabled={guardando || !nueva.trim()} className="kw-btn-add">
-            {guardando ? (
-              <>
-                <span className="kw-spinner" aria-hidden="true" />
-                Agregando…
-              </>
-            ) : (
-              <>
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                  <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-                </svg>
-                Agregar
-              </>
-            )}
-          </button>
-        </form>
+        {/* ── Card principal ── */}
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden mb-4">
 
-        {/* Error */}
-        {error && (
-          <div className="kw-error" role="alert">
-            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-              <circle cx="7" cy="7" r="6" stroke="#f87171" strokeWidth="1.4"/>
-              <path d="M7 4v3.5M7 9.5v.5" stroke="#f87171" strokeWidth="1.4" strokeLinecap="round"/>
-            </svg>
-            {error}
-          </div>
-        )}
-
-        {/* Estado cargando */}
-        {cargando && (
-          <div className="kw-loading">
-            <span className="kw-spinner kw-spinner--lg" aria-hidden="true" />
-            <span>Cargando palabras clave…</span>
-          </div>
-        )}
-
-        {/* Lista de keywords */}
-        {!cargando && keywords.length === 0 && (
-          <div className="kw-empty">
-            <svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true">
-              <circle cx="18" cy="18" r="15" stroke="rgba(99,180,255,0.15)" strokeWidth="1.5"/>
-              <path d="M18 11v7M18 22v1" stroke="rgba(99,180,255,0.3)" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
-            <p className="kw-empty__title">Sin palabras clave todavía</p>
-            <p className="kw-empty__body">Agrega la primera usando el campo de arriba.</p>
-          </div>
-        )}
-
-        {!cargando && keywords.length > 0 && (
-          <ul className="kw-list">
-            {keywords.map((k) => (
-              <li key={k.id} className="kw-item">
-                <div className="kw-item__left">
-                  {/* Punto decorativo */}
-                  <span className="kw-item__dot" aria-hidden="true" />
-                  <span className="kw-item__label">{k.palabra_clave}</span>
-                </div>
-                <button
-                  className="kw-btn-remove"
-                  onClick={() => eliminarKeyword(k.id)}
-                  aria-label={`Eliminar "${k.palabra_clave}"`}
-                >
-                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                    <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+          {/* Formulario agregar */}
+          <form onSubmit={agregarKeyword} className="flex items-center gap-3 px-5 py-4 border-b border-slate-100">
+            <div className="relative flex-1 flex items-center">
+              <svg
+                className="absolute left-3 text-slate-400 pointer-events-none shrink-0"
+                width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"
+              >
+                <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.4" />
+                <path d="M10 10l4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+              <input
+                type="text"
+                value={nueva}
+                onChange={(e) => setNueva(e.target.value)}
+                placeholder="Ej: informática, aseo, construcción"
+                disabled={guardando}
+                className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-200 bg-slate-50 text-slate-900 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#38bdf8] focus:border-transparent transition disabled:opacity-50"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={guardando || !nueva.trim()}
+              className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+            >
+              {guardando ? (
+                <>
+                  <svg className="animate-spin shrink-0" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                   </svg>
-                  Eliminar
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+                  Agregando…
+                </>
+              ) : (
+                <>
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M3 8h10M8 13l5-5-5-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Agregar
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Error */}
+          {error && (
+            <div className="flex items-center gap-2 mx-5 my-3 bg-red-50 border border-red-200 rounded-lg px-4 py-2.5 text-sm text-red-600" role="alert">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" className="shrink-0" aria-hidden="true">
+                <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4" />
+                <path d="M8 5v3.5M8 10.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+              {error}
+            </div>
+          )}
+
+          {/* Cargando */}
+          {cargando && (
+            <div className="flex items-center gap-3 px-5 py-8 text-slate-400 text-sm">
+              <svg className="animate-spin shrink-0" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+              </svg>
+              Cargando palabras clave…
+            </div>
+          )}
+
+          {/* Estado vacío */}
+          {!cargando && keywords.length === 0 && (
+            <div className="flex flex-col items-center py-14 px-6 text-center gap-2">
+              <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-1" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <circle cx="11" cy="11" r="8" stroke="#94a3b8" strokeWidth="1.5" />
+                  <path d="M21 21l-4.35-4.35" stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              </div>
+              <p className="text-sm font-semibold text-slate-700">Sin palabras clave todavía</p>
+              <p className="text-xs text-slate-400">Agrega la primera usando el campo de arriba.</p>
+            </div>
+          )}
+
+          {/* Lista de keywords */}
+          {!cargando && keywords.length > 0 && (
+            <ul className="divide-y divide-slate-100">
+              {keywords.map((k) => (
+                <li key={k.id} className="flex items-center justify-between px-5 py-3.5">
+                  {/* Keyword con punto cian */}
+                  <div className="flex items-center gap-3">
+                    <span className="w-2 h-2 rounded-full bg-[#38bdf8] shrink-0" aria-hidden="true" />
+                    <span className="text-slate-800 text-sm font-medium">{k.palabra_clave}</span>
+                  </div>
+
+                  {/* Botón eliminar — siempre visible con ícono papelera */}
+                  <button
+                    onClick={() => eliminarKeyword(k.id)}
+                    aria-label={`Eliminar "${k.palabra_clave}"`}
+                    className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-red-500 transition-colors"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path d="M2 4h12M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 001 1h6a1 1 0 001-1l1-9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    Eliminar
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* Pie de la card: contador */}
+          {!cargando && keywords.length > 0 && (
+            <div className="px-5 py-3 border-t border-slate-100">
+              <p className="text-xs text-slate-400">
+                {keywords.length} palabra{keywords.length !== 1 ? 's' : ''} clave activa{keywords.length !== 1 ? 's' : ''}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* ── Card de tip/consejo ── */}
+        <div className="bg-[#e0f7ff] border border-[#38bdf8]/30 rounded-2xl px-5 py-4 flex gap-3">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0 text-[#0891b2] mt-0.5" aria-hidden="true">
+            <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4" />
+            <path d="M8 7v5M8 5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+          </svg>
+          <p className="text-sm text-[#0e7490] leading-relaxed">
+            Las palabras clave se comparan contra el nombre de la licitación y sus elementos
+            internos. Usa términos generales para mejores resultados — por ejemplo{' '}
+            <strong className="font-semibold">aseo</strong> en lugar de{' '}
+            <strong className="font-semibold">servicio de aseo y limpieza</strong>.
+          </p>
+        </div>
       </main>
-
-      <style>{`
-        /* ── Reset ── */
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-        /* ── Root ── */
-        .kw-root {
-          min-height: 100vh;
-          background: #050f1e;
-          position: relative;
-          font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
-          color: #d6eaf8;
-        }
-
-        /* ── Blobs ── */
-        .kw-bg { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
-        .kw-blob {
-          position: absolute;
-          border-radius: 50%;
-          filter: blur(90px);
-          opacity: 0.28;
-        }
-        .kw-blob-1 {
-          width: 600px; height: 600px;
-          background: radial-gradient(circle, #0a4f8a 0%, transparent 70%);
-          top: -180px; left: -140px;
-        }
-        .kw-blob-2 {
-          width: 450px; height: 450px;
-          background: radial-gradient(circle, #063560 0%, transparent 70%);
-          bottom: -100px; right: -80px;
-        }
-        .kw-blob-3 {
-          width: 300px; height: 300px;
-          background: radial-gradient(circle, #005fa3 0%, transparent 70%);
-          top: 45%; left: 60%;
-          transform: translate(-50%, -50%);
-        }
-
-        /* ── Navbar (idéntica a página principal) ── */
-        .mp-navbar {
-          position: sticky;
-          top: 0;
-          z-index: 100;
-          background: rgba(5, 15, 30, 0.85);
-          border-bottom: 1px solid rgba(99, 180, 255, 0.1);
-          backdrop-filter: blur(20px);
-          -webkit-backdrop-filter: blur(20px);
-        }
-        .mp-navbar-inner {
-          max-width: 900px;
-          margin: 0 auto;
-          padding: 0 20px;
-          height: 58px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-        }
-        .mp-brand { display: flex; align-items: center; gap: 10px; }
-        .mp-nav-icon {
-          width: 32px; height: 32px;
-          border-radius: 8px;
-          background: linear-gradient(135deg, #0d2340 0%, #0a3a6e 100%);
-          border: 1px solid rgba(99,210,255,0.2);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .mp-nav-title {
-          font-size: 1rem;
-          font-weight: 700;
-          color: #e8f4ff;
-          letter-spacing: -0.01em;
-        }
-        .mp-nav-links { display: flex; align-items: center; gap: 8px; }
-        .mp-nav-link {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          padding: 6px 14px;
-          border-radius: 8px;
-          font-size: 0.82rem;
-          font-weight: 500;
-          color: #7fb8d6;
-          text-decoration: none;
-          border: 1px solid rgba(99,180,255,0.1);
-          transition: background 0.2s, color 0.2s;
-        }
-        .mp-nav-link:hover { background: rgba(99,180,255,0.07); color: #c8e6f5; }
-
-        /* ── Main ── */
-        .kw-main {
-          position: relative;
-          z-index: 1;
-          max-width: 600px;
-          margin: 0 auto;
-          padding: 36px 20px 60px;
-        }
-
-        /* ── Cabecera ── */
-        .kw-section-header { margin-bottom: 28px; }
-        .kw-title-wrap {
-          display: flex;
-          align-items: baseline;
-          gap: 10px;
-          margin-bottom: 6px;
-        }
-        .kw-title {
-          font-size: 1.15rem;
-          font-weight: 600;
-          color: #e8f4ff;
-          letter-spacing: -0.01em;
-        }
-        .kw-count {
-          font-size: 0.75rem;
-          color: #4a7a99;
-          background: rgba(99,180,255,0.07);
-          border: 1px solid rgba(99,180,255,0.12);
-          padding: 2px 8px;
-          border-radius: 999px;
-        }
-        .kw-description {
-          font-size: 0.82rem;
-          color: #4a7a99;
-          line-height: 1.5;
-        }
-
-        /* ── Formulario ── */
-        .kw-form {
-          display: flex;
-          gap: 8px;
-          margin-bottom: 20px;
-        }
-        .kw-input-wrap {
-          position: relative;
-          flex: 1;
-          display: flex;
-          align-items: center;
-        }
-        .kw-input-icon {
-          position: absolute;
-          left: 12px;
-          color: #4a7a99;
-          pointer-events: none;
-        }
-        .kw-input {
-          width: 100%;
-          padding: 10px 14px 10px 36px;
-          border-radius: 10px;
-          border: 1px solid rgba(99,180,255,0.14);
-          background: rgba(255,255,255,0.04);
-          color: #d6eaf8;
-          font-size: 0.88rem;
-          outline: none;
-          font-family: inherit;
-          transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
-        }
-        .kw-input::placeholder { color: rgba(100,160,200,0.4); }
-        .kw-input:focus {
-          border-color: rgba(56,189,248,0.55);
-          background: rgba(56,189,248,0.05);
-          box-shadow: 0 0 0 3px rgba(56,189,248,0.08);
-        }
-        .kw-input:disabled { opacity: 0.5; }
-
-        /* ── Botón agregar ── */
-        .kw-btn-add {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          padding: 10px 18px;
-          border-radius: 10px;
-          border: none;
-          background: linear-gradient(135deg, #1565c0, #1e88e5);
-          color: #fff;
-          font-size: 0.85rem;
-          font-weight: 600;
-          cursor: pointer;
-          white-space: nowrap;
-          font-family: inherit;
-          transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
-          box-shadow: 0 3px 16px rgba(21,101,192,0.35);
-        }
-        .kw-btn-add:hover:not(:disabled) {
-          opacity: 0.9;
-          transform: translateY(-1px);
-          box-shadow: 0 5px 20px rgba(21,101,192,0.5);
-        }
-        .kw-btn-add:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
-
-        /* ── Spinner ── */
-        .kw-spinner {
-          width: 12px; height: 12px;
-          border: 2px solid rgba(255,255,255,0.3);
-          border-top-color: #fff;
-          border-radius: 50%;
-          animation: kw-spin 0.7s linear infinite;
-          flex-shrink: 0;
-          display: inline-block;
-        }
-        .kw-spinner--lg {
-          width: 16px; height: 16px;
-          border-color: rgba(99,180,255,0.2);
-          border-top-color: #38bdf8;
-        }
-        @keyframes kw-spin { to { transform: rotate(360deg); } }
-
-        /* ── Error ── */
-        .kw-error {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          background: rgba(220,38,38,0.1);
-          border: 1px solid rgba(248,113,113,0.2);
-          border-radius: 8px;
-          padding: 10px 14px;
-          color: #fca5a5;
-          font-size: 0.82rem;
-          margin-bottom: 16px;
-        }
-
-        /* ── Cargando ── */
-        .kw-loading {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 32px 0;
-          color: #4a7a99;
-          font-size: 0.85rem;
-        }
-
-        /* ── Vacío ── */
-        .kw-empty {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 8px;
-          padding: 52px 20px;
-          text-align: center;
-        }
-        .kw-empty__title { font-size: 0.92rem; color: #d6eaf8; font-weight: 500; }
-        .kw-empty__body  { font-size: 0.82rem; color: #4a7a99; }
-
-        /* ── Lista ── */
-        .kw-list {
-          list-style: none;
-          padding: 0;
-          display: flex;
-          flex-direction: column;
-          gap: 0;
-          border: 1px solid rgba(99,180,255,0.1);
-          border-radius: 12px;
-          overflow: hidden;
-          background: rgba(8,22,42,0.5);
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-        }
-
-        /* ── Item keyword ── */
-        .kw-item {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 13px 16px;
-          border-bottom: 1px solid rgba(99,180,255,0.07);
-          transition: background 0.15s;
-        }
-        .kw-item:last-child { border-bottom: none; }
-        .kw-item:hover { background: rgba(99,180,255,0.04); }
-
-        .kw-item__left {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-        .kw-item__dot {
-          width: 6px; height: 6px;
-          border-radius: 50%;
-          background: rgba(56,189,248,0.5);
-          flex-shrink: 0;
-        }
-        .kw-item__label {
-          font-size: 0.88rem;
-          color: #c8e6f5;
-          font-weight: 500;
-        }
-
-        /* ── Botón eliminar ── */
-        .kw-btn-remove {
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          padding: 4px 10px;
-          border-radius: 6px;
-          border: 1px solid rgba(248,113,113,0.15);
-          background: rgba(220,38,38,0.06);
-          color: #f87171;
-          font-size: 0.74rem;
-          font-weight: 500;
-          cursor: pointer;
-          font-family: inherit;
-          transition: background 0.15s, border-color 0.15s;
-          opacity: 0;
-        }
-        .kw-item:hover .kw-btn-remove { opacity: 1; }
-        .kw-btn-remove:hover {
-          background: rgba(220,38,38,0.14);
-          border-color: rgba(248,113,113,0.35);
-        }
-      `}</style>
     </div>
   )
 }
