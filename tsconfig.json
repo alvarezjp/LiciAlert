@@ -28,8 +28,7 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts",
-    "supabase"
+    "**/*.mts"    
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules","supabase"]
 }
