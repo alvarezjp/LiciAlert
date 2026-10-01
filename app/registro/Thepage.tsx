@@ -99,7 +99,7 @@ export default function RegistroPage() {
               <path d="M6 8h10M6 11h7M6 14h5" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
             </svg>
           </div>
-          <span className="text-[#0d1b2e] font-bold text-lg">LicitaAlerta</span>
+          <span className="text-[#0d1b2e] font-bold text-lg">LiciAlert</span>
         </div>
 
         {/* Card */}
@@ -232,7 +232,7 @@ function PanelIzquierdo() {
             <path d="M6 8h10M6 11h7M6 14h5" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
           </svg>
         </div>
-        <span className="text-white font-bold text-xl tracking-tight">LicitaAlerta</span>
+        <span className="text-white font-bold text-xl tracking-tight">LiciAlert</span>
       </div>
 
       {/* Contenido hero */}
@@ -278,7 +278,7 @@ function PanelIzquierdo() {
 
       {/* Footer */}
       <p className="relative z-10 text-[#4a6a80] text-xs">
-        © {new Date().getFullYear()} LicitaAlerta — Datos de Mercado Público Chile
+        © {new Date().getFullYear()} LiciAlert — Datos de Mercado Público Chile
       </p>
     </div>
   )

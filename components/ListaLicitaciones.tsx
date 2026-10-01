@@ -36,7 +36,7 @@ const URL_BASE_MERCADO_PUBLICO =
 function BadgeEstadoUsuario({ estado }: { estado: Licitacion['estado_usuario'] }) {
   const config = {
     nueva: {
-      label: 'Nueva',
+      label: 'Sin revisar',
       dot: 'bg-[#38bdf8]',
       className: 'bg-[#e0f7ff] text-[#0891b2] border border-[#38bdf8]/40',
     },

@@ -370,8 +370,36 @@ select * from public.estado_pausa_enriquecimiento;
 select * from public.proceso_enriquecimiento_lock;
 -- debe existir exactamente 1 fila con id = true, bloqueado_en = null
 ```
+En la tabla lotes_enriquecimiento, agregar la columna:
 
+sql
+hora_envio_permitida timestamptz
+
+Tabla nueva, agregar al final del bloque de esquema:
+
+sql
+-- =========================================================
+-- TABLA: licitaciones_saltadas
+-- =========================================================
+create table public.licitaciones_saltadas (
+  codigo text primary key references public.licitaciones(codigo) on delete cascade,
+  nombre text,
+  lote_id uuid,
+  intentos int not null default 3,
+  ultimo_status int,
+  ultimo_error text,          -- primeros ~200 caracteres del body de la API
+  saltada_en timestamptz not null default now(),
+  revisada boolean not null default false
+);
+
+create index licitaciones_saltadas_pendientes_idx
+  on public.licitaciones_saltadas (saltada_en desc) where revisada = false;
+
+grant all on public.licitaciones_saltadas to service_role;
+alter table public.licitaciones_saltadas enable row level security;
+-- Sin políticas: solo service_role y las funciones securi
 ---
+
 
 ## 5. Funciones de negocio (búsqueda, notificaciones, admin, enriquecimiento)
 
@@ -578,6 +606,88 @@ select proname from pg_proc where pronamespace = 'public'::regnamespace order by
 -- admin_stats_usuarios, cron_unschedule_seguro, incrementar_contador_llamadas,
 -- codigos_sin_organismo, intentar_bloquear_enriquecimiento, liberar_bloqueo_enriquecimiento
 ```
+Reemplazar codigos_sin_organismo por esta versión (excluye las saltadas):
+
+sql
+create or replace function public.codigos_sin_organismo(p_codigos text[])
+returns table (codigo text, nombre text)
+language sql
+stable
+as $$
+  select l.codigo, l.nombre
+  from public.licitaciones l
+  where l.codigo = any(p_codigos)
+    and l.organismo is null
+    and not exists (
+      select 1 from public.licitaciones_saltadas s where s.codigo = l.codigo
+    );
+$$;
+
+grant execute on function public.codigos_sin_organismo(text[]) to service_role;
+
+Agregar admin_stats_saltadas:
+
+sql
+create or replace function public.admin_stats_saltadas()
+returns table (
+  codigo text,
+  nombre text,
+  intentos int,
+  ultimo_status int,
+  ultimo_error text,
+  saltada_en timestamptz,
+  revisada boolean
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select s.codigo, s.nombre, s.intentos, s.ultimo_status,
+         s.ultimo_error, s.saltada_en, s.revisada
+  from public.licitaciones_saltadas s
+  where public.es_admin_actual()
+  order by s.saltada_en desc
+  limit 200;
+$$;
+
+Agregar admin_stats_lotes (con saltadas):
+
+sql
+drop function if exists public.admin_stats_lotes();
+drop function if exists public.admin_stats_lotes(integer);
+
+create function public.admin_stats_lotes(p_dias int default 14)
+returns table (
+  id uuid,
+  fecha date,
+  corrida text,
+  total_codigos int,
+  pendientes_actuales int,
+  procesados_aprox int,
+  saltadas int,
+  completado boolean,
+  creado_en timestamptz,
+  completado_en timestamptz
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    l.id, l.fecha, l.corrida, l.total_codigos,
+    jsonb_array_length(l.codigos_pendientes) as pendientes_actuales,
+    (l.total_codigos - jsonb_array_length(l.codigos_pendientes)) as procesados_aprox,
+    (select count(*)::int from public.licitaciones_saltadas s where s.lote_id = l.id) as saltadas,
+    l.completado, l.creado_en, l.completado_en
+  from public.lotes_enriquecimiento l
+  where public.es_admin_actual()
+    and l.creado_en > now() - (p_dias || ' days')::interval
+  order by l.creado_en desc;
+$$;
+
+Actualizar la verificación de funciones de la Sección 5: agregar admin_stats_saltadas y admin_stats_lotes a la lista esperada.
 
 **Nota — función descartada originalmente, luego recreada por otra razón:** en el reset del 2026-09-10 se decidió NO recrear `codigos_pendientes_relevantes(p_limite int)` ni `codigos_sin_organismo(p_codigos text[])`, porque el diseño de lotes de la Etapa 11 no las necesitaba (calculaba pendientes directo en la Edge Function con `.in()`). **Esa decisión cambió el 2026-09-15**: `codigos_sin_organismo` sí se recreó, pero no por el motivo original (backlog histórico) sino porque el `.in()` con arrays grandes rompía HTTP/2. `codigos_pendientes_relevantes` sigue sin recrearse — su caso de uso (Paso C, backlog histórico best-effort) sigue fuera de alcance por decisión del usuario.
 
@@ -871,3 +981,43 @@ Cuando los 10 pasos anteriores estén verificados y el monitoreo de 2-3 días de
   2. Decidir, una vez confirmada la causa, si además de arreglar el mapeo hace falta un tercer estado en el modelo de datos (ej. `organismo_no_disponible boolean`) para no confundir "todavía no procesado" con "procesado pero sin dato" — actualmente ambos casos se ven idénticos (`organismo is null`) en toda la base de código (`codigos_sin_organismo`, panel de admin, búsqueda).
 
 - Próximo paso sugerido: con los datos de hoy (21/09) y el `raw_json_detalle` de un caso afectado, confirmar la causa raíz del bug de "lote completo con organismo null". Si es un mapeo incorrecto, corregir `obtenerDetalleLicitacion` en `ingesta-diaria/index.ts`. Si es un vacío legítimo de la API, decidir cómo modelarlo (por ejemplo, no volver a intentar esos códigos y marcarlos explícitamente en vez de dejarlos como "pendiente eterno" indistinguible). Recién después de eso, retomar la activación de los 3 crons restantes del Paso 9, y seguir con el Paso 10 (frontend end-to-end) y el punto B del desglose en el panel de admin.
+
+[2026-09-28] — Agente/sesión: Claude (licitaciones saltadas, fin de la pausa de 24h, panel admin)
+Paso(s) en el que se trabajó: Paso 7 (Edge Function ingesta-diaria), Paso 5 (funciones SQL) y panel /admin. Trabajo posterior al cierre del Paso 8.
+Qué se completó:
+Diagnóstico de la pausa de 24h: la API de Mercado Público devuelve HTTP 500 con Codigo 10000 ("String or binary data would be truncated") para ciertos códigos. Es un error interno de ellos, no un rate limit. El cortacircuito antiguo lo trataba como rate limit y terminaba en pausa de 24h.
+Clasificación de fallos en procesarLote:
+rate_limit (429, 403 o texto "simultáneas" en el body): pausa corta de 60s. El código no se penaliza.
+infra (timeout, red, 502/503/504): cuenta para el cortacircuito (3 seguidos → pausa de 60s). El código no se penaliza.
+codigo (500 u otro error propio de ese código): suma 1 a intentos. No activa el cortacircuito.
+Códigos saltados: los intentos viajan dentro de lotes_enriquecimiento.codigos_pendientes ({codigo, nombre, intentos}), sin columna nueva. Al llegar a MAX_INTENTOS_POR_CODIGO = 3 (en total, sin importar cuándo ocurran) se inserta en la tabla nueva licitaciones_saltadas y sale del lote. El lote puede completarse y el correo sale igual.
+Eliminada la pausa de 24h: ya no existen PAUSA_LARGA_HORAS ni el escalamiento. Solo queda la pausa de 60s. cortes_seguidos es solo informativo.
+Ruido en logs_ingesta: en accion=continuar solo se inserta fila si procesados > 0. accion=ingestar siempre registra.
+Correo diferenciado por corrida (hora_envio_permitida): columna nueva en lotes_enriquecimiento (confirmada como agregada por el usuario). Corrida "tarde" (14:00 Chile): correo inmediato. Corrida "noche" (23:30 Chile): correo pospuesto a las 07:00 del día siguiente. El cron continuar recoge los lotes completados sin avisar cuando ya pasó su hora.
+Fix del lock: el finally liberaba el lock incluso cuando la invocación se había omitido por otra activa, lo que permitía solapamientos y 429. Ahora existe la bandera bloqueoPropio y solo libera quien lo tomó.
+codigos_sin_organismo excluye las saltadas. Sin esto, una saltada volvería a entrar a un lote nuevo y se repetiría el ciclo.
+Panel admin: nueva sección "Licitaciones saltadas" (código, nombre, motivo HTTP + mensaje, intentos, fecha), nueva stat card (con conteo de sin revisar) y columna "Saltadas" en la tabla de lotes. Nueva función admin_stats_saltadas().
+admin_stats_lotes: ahora devuelve la columna saltadas. Firma final: admin_stats_lotes(p_dias int default 14).
+Qué quedó pendiente / a medias:
+BUG DE FONDO SIN RESOLVER (heredado del 2026-09-16): procesarLote trata cualquier respuesta OK como "enriquecida" sin verificar que organismo haya venido con valor. El 16/09, 36 de 1000 códigos quedaron con organismo = null con el lote "completado". Sigue sin saberse si es un vacío legítimo de la API o un error de mapeo. Diagnóstico pendiente:
+sql
+     select codigo, nombre, raw_json_detalle
+     from public.licitaciones
+     where fecha_publicacion = (now() at time zone 'America/Santiago')::date
+       and organismo is null
+       and raw_json_detalle is not null
+     limit 3;
+Confirmar el despliegue de ingesta-diaria con el fix del lock (npx supabase functions deploy ingesta-diaria --no-verify-jwt).
+Inconsistencia de horarios en la Sección 9: el código de ingesta-diaria asume corridas a las 14:00 y 23:30 hora Chile, pero los cron de la Sección 9 de este documento dicen 00:00 y 12:00. Verificar los reales con select jobname, schedule, active from cron.job; y actualizar la Sección 9 (recordar que pg_cron usa UTC fijo y hay que ajustar 1h entre horario de verano e invierno).
+Paso 10 (frontend end-to-end) y la verificación de bloqueo a usuarios no-admin siguen sin cerrarse.
+Las saltadas no tienen forma de marcarse como revisada ni de reintentarse desde la UI. Para reintentar una a mano: delete from public.licitaciones_saltadas where codigo = '...';.
+Resultado de la investigación de rate limiting: sin eventos nuevos de 429/403. El hallazgo de esta sesión es que el HTTP 500 Codigo 10000 no es rate limit y no debe activar el cortacircuito.
+Decisiones tomadas que no estaban en este documento:
+Los 3 intentos se cuentan en total por código, no consecutivos.
+Un código saltado no se reintenta solo. Solo se reintenta si se borra manualmente su fila de licitaciones_saltadas.
+Se reescribió admin_stats_lotes sin tener el SQL original, por lo que procesados_aprox se calcula como total_codigos - pendientes. Si el original calculaba otra cosa, revisar.
+Lección: un drop function sin conocer todas las sobrecargas deja funciones duplicadas. Esto causó el error "Could not choose the best candidate function" en /admin. Antes de recrear una función, listar sus versiones con select proname, pg_get_function_arguments(oid) from pg_proc where proname = '<nombre>';.
+Bloqueos o cosas que el humano debe resolver:
+Correr la consulta de diagnóstico del pendiente 1 y compartir el raw_json_detalle de una fila afectada.
+Confirmar los horarios reales de los cron y el despliegue del fix del lock.
+Próximo paso sugerido: resolver el bug de fondo de organismo null con detalle OK (leer el campo correcto o marcar esos casos como "sin dato" para no confundirlos con pendientes). Después, alinear los cron de la Sección 9 con las corridas reales, activar los que falten y seguir con el Paso 10.

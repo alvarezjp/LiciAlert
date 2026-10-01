@@ -15,18 +15,29 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 // respecto a v2): se confirmó empíricamente que la API de Mercado Público
 // responde 429 incluso con concurrencia 1 sin espera, pero no responde 429
 // si se espera 2000ms entre una petición y la siguiente.
+//
+// v4 — Clasificación de fallos + licitaciones saltadas (sin pausa de 24h):
+//   - Fallo "rate_limit" (429/403/"peticiones simultáneas"): pausa corta de 60s.
+//   - Fallo "infra" (timeout, red, 502/503/504, JSON inválido): cuenta para el
+//     cortacircuito (3 seguidos → pausa corta de 60s). El código no se penaliza.
+//   - Fallo "codigo" (500 u otro error propio de ESE código, ej. licitación de
+//     prueba con Codigo 10000 "String or binary data would be truncated"):
+//     suma 1 a `intentos` de ese código. NO activa el cortacircuito. Al llegar
+//     a MAX_INTENTOS_POR_CODIGO (en total, sin importar cuándo ocurran) se
+//     registra en `licitaciones_saltadas` y sale del lote. No se reintenta
+//     solo: para reintentar a mano, borrar su fila de licitaciones_saltadas.
 
 const DELAY_ENTRE_PETICIONES_MS = 2_000 // confirmado empíricamente: sin esto, 429 garantizado
 const PRESUPUESTO_MS = 135_000 // margen de seguridad bajo el límite de 150s del plan gratuito
 const TIMEOUT_DETALLE_MS = 8_000 // evita que una sola petición colgada bloquee todo
-const MAX_FALLOS_SEGUIDOS = 3 // cortacircuito si varios códigos seguidos fallan (ya no por tandas)
-const PAUSA_CORTA_SEGUNDOS = 60 // pausa tras el 1er corte
-const PAUSA_LARGA_HORAS = 24 // pausa tras 2 cortes seguidos sin éxito entre medio
-const UMBRAL_CORTES_PARA_ESCALAR = 2
+const MAX_FALLOS_SEGUIDOS = 3 // cortacircuito si varios fallos de INFRA seguidos
+const PAUSA_CORTA_SEGUNDOS = 60 // única pausa: ya no existe la pausa larga de 24h
+const MAX_INTENTOS_POR_CODIGO = 3 // intentos en total antes de saltar un código
 const TOPE_DIARIO_LLAMADAS = 9_000 // límite real de la API: 10.000/día — se deja margen de 1.000
 const HORA_ENVIO_CORRIDA_NOCHE = 7 // 07:00 Chile del día siguiente
 
-type CodigoPendiente = { codigo: string; nombre: string }
+// `intentos` es opcional: los lotes antiguos no lo traen (se asume 0).
+type CodigoPendiente = { codigo: string; nombre: string; intentos?: number }
 
 type Lote = {
   id: string
@@ -34,9 +45,11 @@ type Lote = {
   hora_envio_permitida: string | null
 }
 
+type TipoFallo = 'rate_limit' | 'infra' | 'codigo'
+
 type ResultadoDetalle =
   | { ok: true; datos: any }
-  | { ok: false; status?: number; error?: string }
+  | { ok: false; tipo: TipoFallo; status?: number; error?: string; cuerpo?: string }
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -93,7 +106,7 @@ function fechaChileAUtcISO(anio: string, mes: string, dia: string, hora: number,
   return new Date(fechaNaiveUTC.getTime() - offsetHoras * 60 * 60 * 1000).toISOString()
 }
 
-// --- Pausa corta/larga por rate limit (429/403 o fallas repetidas) ---
+// --- Pausa corta por rate limit (429/403 o fallas de infraestructura repetidas) ---
 
 async function pausaActiva(supabase: ReturnType<typeof createClient>): Promise<boolean> {
   const { data, error } = await supabase
@@ -107,9 +120,12 @@ async function pausaActiva(supabase: ReturnType<typeof createClient>): Promise<b
   return new Date(data.pausado_hasta as string).getTime() > Date.now()
 }
 
+// Solo existe la pausa corta. `cortes_seguidos` queda como dato informativo
+// (ya no escala a nada): si el rate limit persiste, simplemente se sigue
+// pausando 60s y reintentando en el siguiente tick del cron.
 async function registrarCorteYPausar(
   supabase: ReturnType<typeof createClient>
-): Promise<{ tipo: 'corta' | 'larga'; cortesSeguidos: number }> {
+): Promise<number> {
   const { data } = await supabase
     .from('estado_pausa_enriquecimiento')
     .select('cortes_seguidos')
@@ -118,21 +134,12 @@ async function registrarCorteYPausar(
 
   const cortesNuevos = (data?.cortes_seguidos ?? 0) + 1
 
-  if (cortesNuevos >= UMBRAL_CORTES_PARA_ESCALAR) {
-    const hasta = new Date(Date.now() + PAUSA_LARGA_HORAS * 60 * 60 * 1000).toISOString()
-    await supabase
-      .from('estado_pausa_enriquecimiento')
-      .update({ pausado_hasta: hasta, cortes_seguidos: 0 })
-      .eq('id', true)
-    return { tipo: 'larga', cortesSeguidos: cortesNuevos }
-  }
-
   const hasta = new Date(Date.now() + PAUSA_CORTA_SEGUNDOS * 1000).toISOString()
   await supabase
     .from('estado_pausa_enriquecimiento')
     .update({ pausado_hasta: hasta, cortes_seguidos: cortesNuevos })
     .eq('id', true)
-  return { tipo: 'corta', cortesSeguidos: cortesNuevos }
+  return cortesNuevos
 }
 
 async function resetearCortesSeguidos(supabase: ReturnType<typeof createClient>) {
@@ -165,6 +172,10 @@ async function incrementarConteo(supabase: ReturnType<typeof createClient>, cant
 
 // --- Llamada al endpoint de detalle ---
 
+// Protección extra: si la API avisa de rate limit en el body (aunque el status
+// no sea 429), se trata como rate limit y NO como culpa del código.
+const REGEX_PETICIONES_SIMULTANEAS = /simult[aá]neas/i
+
 async function obtenerDetalleLicitacion(codigo: string, ticket: string): Promise<ResultadoDetalle> {
   const url = `https://api.mercadopublico.cl/servicios/v1/publico/licitaciones.json?codigo=${encodeURIComponent(
     codigo
@@ -175,13 +186,35 @@ async function obtenerDetalleLicitacion(codigo: string, ticket: string): Promise
 
   try {
     const resp = await fetch(url, { signal: controller.signal })
+
     if (!resp.ok) {
-      return { ok: false, status: resp.status }
+      const cuerpo = (await resp.text().catch(() => '')).slice(0, 200)
+      const esRateLimit =
+        resp.status === 429 || resp.status === 403 || REGEX_PETICIONES_SIMULTANEAS.test(cuerpo)
+      // 502/503/504 = problema transitorio del lado de la API, no del código.
+      // 500 NO entra aquí: se confirmó que es error propio de ese código
+      // (ej. licitación de prueba, Codigo 10000 "String or binary data would be truncated").
+      const esInfra = resp.status >= 502 && resp.status <= 504
+      return {
+        ok: false,
+        tipo: esRateLimit ? 'rate_limit' : esInfra ? 'infra' : 'codigo',
+        status: resp.status,
+        cuerpo,
+      }
     }
 
     const data = await resp.json()
     const detalle = data?.Listado?.[0]
-    if (!detalle) return { ok: false, error: 'sin_listado_en_respuesta' }
+    if (!detalle) {
+      const cuerpo = JSON.stringify(data ?? null).slice(0, 200)
+      return {
+        ok: false,
+        tipo: REGEX_PETICIONES_SIMULTANEAS.test(cuerpo) ? 'rate_limit' : 'codigo',
+        status: resp.status,
+        error: 'sin_listado_en_respuesta',
+        cuerpo,
+      }
+    }
 
     const items: any[] = detalle.Items?.Listado ?? []
     const productosTexto = items
@@ -206,8 +239,13 @@ async function obtenerDetalleLicitacion(codigo: string, ticket: string): Promise
 
     return { ok: true, datos: datosBase }
   } catch (err) {
+    // Timeout, red caída o JSON inválido: falla de infraestructura, no del código.
     const esTimeout = err instanceof DOMException && err.name === 'AbortError'
-    return { ok: false, error: esTimeout ? 'timeout' : String((err as any)?.message ?? err) }
+    return {
+      ok: false,
+      tipo: 'infra',
+      error: esTimeout ? 'timeout' : String((err as any)?.message ?? err),
+    }
   } finally {
     clearTimeout(timeoutId)
   }
@@ -224,17 +262,17 @@ async function procesarLote(
 ): Promise<{
   pendientesRestantes: CodigoPendiente[]
   enriquecidas: number
+  saltadas: number
   procesados: number
   cortadoPorCircuito: boolean
-  tipoPausa?: 'corta' | 'larga'
   detenidoPorTopeDiario: boolean
 }> {
   let pendientes = [...lote.codigos_pendientes]
   let enriquecidas = 0
+  let saltadas = 0
   let procesados = 0
-  let fallosSeguidos = 0
+  let fallosInfraSeguidos = 0
   let cortadoPorCircuito = false
-  let tipoPausa: 'corta' | 'larga' | undefined
   let detenidoPorTopeDiario = false
 
   let conteoActual = await obtenerConteoHoy(supabase)
@@ -264,7 +302,7 @@ async function procesarLote(
       if (error) throw error
 
       enriquecidas++
-      fallosSeguidos = 0
+      fallosInfraSeguidos = 0
       pendientes = pendientes.slice(1)
 
       console.log(
@@ -272,27 +310,68 @@ async function procesarLote(
         `(conteo diario: ${conteoActual}/${TOPE_DIARIO_LLAMADAS}, restantes en lote: ${pendientes.length})`
       )
     } else {
-      fallosSeguidos++
+      const detalleFallo = resultado.cuerpo ?? resultado.error ?? ''
       console.error(
-        `[${procesados}] FALLO ${item.codigo}: ${resultado.status ?? resultado.error} ` +
-        `(fallo seguido #${fallosSeguidos})`
+        `[${procesados}] FALLO (${resultado.tipo}) ${item.codigo}: ` +
+        `status=${resultado.status ?? 'n/a'} ${resultado.error ?? ''} body="${detalleFallo}"`
       )
 
-      const esRateLimit = resultado.status === 429 || resultado.status === 403
-
-      if (esRateLimit || fallosSeguidos >= MAX_FALLOS_SEGUIDOS) {
-        const resultadoPausa = await registrarCorteYPausar(supabase)
-        tipoPausa = resultadoPausa.tipo
+      if (resultado.tipo === 'rate_limit') {
+        // 429/403: corte inmediato con pausa corta. El código NO se penaliza.
+        const cortes = await registrarCorteYPausar(supabase)
         cortadoPorCircuito = true
         console.error(
-          `CORTACIRCUITO: ${esRateLimit ? 'rate limit (429/403)' : `${fallosSeguidos} fallos seguidos`}. ` +
-          `Corte seguido #${resultadoPausa.cortesSeguidos}. ` +
-          `Pausa activada: ${resultadoPausa.tipo === 'larga' ? `${PAUSA_LARGA_HORAS}h (escalada)` : `${PAUSA_CORTA_SEGUNDOS}s`}.`
+          `CORTACIRCUITO: rate limit. Corte #${cortes}. Pausa de ${PAUSA_CORTA_SEGUNDOS}s.`
         )
         break
       }
 
-      pendientes = [...pendientes.slice(1), item]
+      if (resultado.tipo === 'infra') {
+        // Timeout/red/502-504: cuenta para el cortacircuito, el código no se penaliza.
+        fallosInfraSeguidos++
+        if (fallosInfraSeguidos >= MAX_FALLOS_SEGUIDOS) {
+          const cortes = await registrarCorteYPausar(supabase)
+          cortadoPorCircuito = true
+          console.error(
+            `CORTACIRCUITO: ${fallosInfraSeguidos} fallos de infraestructura seguidos. ` +
+            `Corte #${cortes}. Pausa de ${PAUSA_CORTA_SEGUNDOS}s.`
+          )
+          break
+        }
+        pendientes = [...pendientes.slice(1), item]
+      } else {
+        // Fallo propio del código (500, sin Listado, etc.): la API sí respondió,
+        // así que no es un problema de infraestructura. Suma 1 intento.
+        fallosInfraSeguidos = 0
+        const intentos = (item.intentos ?? 0) + 1
+
+        if (intentos >= MAX_INTENTOS_POR_CODIGO) {
+          const { error: errorSaltada } = await supabase.from('licitaciones_saltadas').upsert(
+            {
+              codigo: item.codigo,
+              nombre: item.nombre,
+              lote_id: lote.id,
+              intentos,
+              ultimo_status: resultado.status ?? null,
+              ultimo_error: detalleFallo || null,
+              saltada_en: new Date().toISOString(),
+              revisada: false,
+            },
+            { onConflict: 'codigo' }
+          )
+          if (errorSaltada) throw errorSaltada
+
+          saltadas++
+          pendientes = pendientes.slice(1)
+          console.error(
+            `SALTADA ${item.codigo} tras ${intentos} intentos (status=${resultado.status ?? 'n/a'}). ` +
+            `Restantes en lote: ${pendientes.length}`
+          )
+        } else {
+          // Al final de la cola, para no martillar el mismo código seguido.
+          pendientes = [...pendientes.slice(1), { ...item, intentos }]
+        }
+      }
     }
 
     const { error: errorLote } = await supabase
@@ -313,9 +392,9 @@ async function procesarLote(
   return {
     pendientesRestantes: pendientes,
     enriquecidas,
+    saltadas,
     procesados,
     cortadoPorCircuito,
-    tipoPausa,
     detenidoPorTopeDiario,
   }
 }
@@ -342,6 +421,7 @@ Deno.serve(async (req) => {
   const inicioMs = Date.now()
   let supabase: ReturnType<typeof createClient> | null = null
   let fecha: string | null = null
+  let bloqueoPropio = false // solo true si ESTA invocación tomó el lock
 
   const url = new URL(req.url)
   const accion = url.searchParams.get('accion') ?? 'ingestar'
@@ -368,7 +448,9 @@ Deno.serve(async (req) => {
         p_segundos_stale: 160,
       })
 
-      if (!bloqueoObtenido) {
+      bloqueoPropio = bloqueoObtenido === true
+
+      if (!bloqueoPropio) {
         return new Response(
           JSON.stringify({ ok: true, mensaje: 'Ya hay otra corrida de enriquecimiento en curso, se omite esta invocación.' }),
           { headers: { 'Content-Type': 'application/json' } }
@@ -516,23 +598,25 @@ Deno.serve(async (req) => {
     }
 
     let cantidadEnriquecidas = 0
+    let cantidadSaltadas = 0
+    let procesados = 0
     let loteCompletado = false
     let cortadoPorCircuito = false
-    let tipoPausa: 'corta' | 'larga' | undefined
+    let enPausa = false
     let detenidoPorTopeDiario = false
 
     if (lote) {
-      const enPausa = await pausaActiva(supabase)
+      enPausa = await pausaActiva(supabase)
 
       if (enPausa) {
-        console.log('Pausa activa por corte(s) reciente(s) — se omite el enriquecimiento esta vez.')
-        cortadoPorCircuito = true
+        console.log('Pausa corta activa — se omite el enriquecimiento esta vez.')
       } else {
         const resultado = await procesarLote(supabase, lote, ticket, inicioMs)
         cantidadEnriquecidas = resultado.enriquecidas
+        cantidadSaltadas = resultado.saltadas
+        procesados = resultado.procesados
         loteCompletado = resultado.pendientesRestantes.length === 0
         cortadoPorCircuito = resultado.cortadoPorCircuito
-        tipoPausa = resultado.tipoPausa
         detenidoPorTopeDiario = resultado.detenidoPorTopeDiario
 
         if (loteCompletado) {
@@ -556,20 +640,27 @@ Deno.serve(async (req) => {
       }
     }
 
-    const mensajeError = detenidoPorTopeDiario
-      ? `TOPE DIARIO alcanzado (${TOPE_DIARIO_LLAMADAS} peticiones/día)`
-      : cortadoPorCircuito
-      ? `CORTACIRCUITO${tipoPausa ? ` (${tipoPausa})` : ''}: revisar logs de la función`
-      : null
+    const mensajes: string[] = []
+    if (detenidoPorTopeDiario) mensajes.push(`TOPE DIARIO alcanzado (${TOPE_DIARIO_LLAMADAS} peticiones/día)`)
+    if (cortadoPorCircuito) mensajes.push('CORTACIRCUITO: revisar logs de la función')
+    if (cantidadSaltadas > 0) mensajes.push(`${cantidadSaltadas} licitación(es) saltada(s) — ver licitaciones_saltadas`)
+    const mensajeError = mensajes.length > 0 ? mensajes.join(' | ') : null
 
-    const { error: logError } = await supabase.from('logs_ingesta').insert({
-      ok: true,
-      fecha_consultada: fecha,
-      cantidad_insertadas: cantidadInsertadas,
-      cantidad_enriquecidas: cantidadEnriquecidas,
-      mensaje_error: mensajeError,
-    })
-    if (logError) console.error('Error al insertar en logs_ingesta:', logError)
+    // Paso 5: en `continuar`, solo se registra en logs_ingesta si hubo actividad
+    // real contra la API (procesados > 0). Así no se inserta una fila cada 3
+    // minutos cuando solo se detectó pausa activa o el tope diario ya estaba lleno.
+    const debeRegistrarLog = accion !== 'continuar' || procesados > 0
+
+    if (debeRegistrarLog) {
+      const { error: logError } = await supabase.from('logs_ingesta').insert({
+        ok: true,
+        fecha_consultada: fecha,
+        cantidad_insertadas: cantidadInsertadas,
+        cantidad_enriquecidas: cantidadEnriquecidas,
+        mensaje_error: mensajeError,
+      })
+      if (logError) console.error('Error al insertar en logs_ingesta:', logError)
+    }
 
     return new Response(
       JSON.stringify({
@@ -578,10 +669,11 @@ Deno.serve(async (req) => {
         fecha,
         insertadas: cantidadInsertadas,
         enriquecidas: cantidadEnriquecidas,
+        saltadas: cantidadSaltadas,
         loteId: lote?.id ?? null,
         loteCompletado,
         cortadoPorCircuito,
-        tipoPausa: tipoPausa ?? null,
+        enPausa,
         detenidoPorTopeDiario,
       }),
       { headers: { 'Content-Type': 'application/json' } }
@@ -608,7 +700,7 @@ Deno.serve(async (req) => {
       headers: { 'Content-Type': 'application/json' },
     })
   } finally {
-    if (supabase && accion === 'continuar') {
+    if (supabase && accion === 'continuar' && bloqueoPropio) {
       await supabase.rpc('liberar_bloqueo_enriquecimiento')
     }
   }

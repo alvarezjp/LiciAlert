@@ -97,20 +97,21 @@ export default async function HomePage({
                 <path d="M6 8h10M6 11h7M6 14h5" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
               </svg>
             </div>
-            <span className="text-white font-bold text-base tracking-tight">LicitaAlerta</span>
+            <span className="text-white font-bold text-base tracking-tight">LiciAlert</span>
           </div>
 
           {/* Nav */}
           <nav className="flex items-center gap-1">
             <a
               href="/keywords"
-              className="flex flex-col items-center px-4 py-1 text-[#94bcd8] hover:text-white transition-colors text-sm"
+              className="inline-flex items-center gap-2 px-4 py-1 text-[#94bcd8] hover:text-white transition-colors text-sm cursor-pointer"
             >
+             
               <svg width="15" height="15" viewBox="0 0 16 16" fill="none" className="mb-0.5" aria-hidden="true">
                 <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.4" />
                 <path d="M10.5 10.5l3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               </svg>
-              Palabras<br />clave
+              Palabras clave
             </a>
             <div className="w-px h-8 bg-white/10 mx-1" />
             <LogoutButton />
@@ -138,11 +139,14 @@ export default async function HomePage({
         <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
           <div>
             <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Licitaciones</h1>
-            <p className="text-slate-500 text-sm mt-1 flex items-center gap-2">
+            <p className="text-slate-500 text-sm mt-1 flex items-center gap-2 flex-wrap">
               Resultados que coinciden con tus palabras clave
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                {licitaciones.length} en total
+              </span>
               {totalNuevas > 0 && (
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#38bdf8]/15 text-[#0891b2] border border-[#38bdf8]/30">
-                  {totalNuevas} nueva{totalNuevas !== 1 ? 's' : ''}
+                  {totalNuevas} sin revisar
                 </span>
               )}
             </p>

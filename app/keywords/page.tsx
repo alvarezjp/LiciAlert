@@ -102,7 +102,7 @@ export default function KeywordsPage() {
                 <path d="M6 8h10M6 11h7M6 14h5" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
               </svg>
             </div>
-            <span className="text-white font-bold text-base tracking-tight">LicitaAlerta</span>
+            <span className="text-white font-bold text-base tracking-tight">LiciAlert</span>
           </div>
 
           {/* Volver al inicio */}
@@ -250,17 +250,25 @@ export default function KeywordsPage() {
         </div>
 
         {/* ── Card de tip/consejo ── */}
-        <div className="bg-[#e0f7ff] border border-[#38bdf8]/30 rounded-2xl px-5 py-4 flex gap-3">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0 text-[#0891b2] mt-0.5" aria-hidden="true">
-            <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4" />
-            <path d="M8 7v5M8 5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-          </svg>
-          <p className="text-sm text-[#0e7490] leading-relaxed">
-            Las palabras clave se comparan contra el nombre de la licitación y sus elementos
-            internos. Usa términos generales para mejores resultados — por ejemplo{' '}
-            <strong className="font-semibold">aseo</strong> en lugar de{' '}
-            <strong className="font-semibold">servicio de aseo y limpieza</strong>.
-          </p>
+        <div className="bg-[#e0f2fe] border border-[#38bdf8]/40 rounded-2xl px-5 py-4 space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#0891b2]">¿Cómo funciona?</p>
+          <div className="text-sm text-[#0e7490] leading-relaxed space-y-1.5">
+            <p>
+              <strong className="font-semibold">Una palabra:</strong> amplía los resultados.{' '}
+              <em>aseo</em> encuentra "servicio de aseo", "insumos de aseo", etc.
+            </p>
+            <p>
+              <strong className="font-semibold">Varias palabras juntas:</strong> la licitación debe
+              tenerlas todas. <em>mantención computadores</em> solo muestra las que mencionen ambas.
+            </p>
+            <p>
+              <strong className="font-semibold">¿Quieres opciones distintas?</strong> Agrégalas por
+              separado: una para <em>aseo</em> y otra para <em>limpieza</em>.
+            </p>
+            <p>
+              No importan las mayúsculas ni el plural: <em>computador</em> también encuentra "computadores".
+            </p>
+          </div>
         </div>
       </main>
     </div>
