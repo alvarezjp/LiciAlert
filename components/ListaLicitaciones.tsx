@@ -121,11 +121,7 @@ export default function ListaLicitaciones({
         </div>
         <p className="text-base font-semibold text-slate-800">Sin resultados todavía</p>
         <p className="text-sm text-slate-500">
-          Agrega o revisa tus{' '}
-          <a href="/keywords" className="text-[#0891b2] hover:underline font-medium">
-            palabras clave
-          </a>
-          .
+          Agrega o revisa tus palabras clave en el panel de la derecha.
         </p>
       </div>
     )
