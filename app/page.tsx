@@ -77,7 +77,7 @@ export default async function HomePage() {
 
       {/* ── Navbar azul marino ── */}
       <header className="bg-[#0d1b2e] sticky top-0 z-50">
-        <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
 
           {/* Brand */}
           <div className="flex items-center gap-3">
@@ -98,7 +98,7 @@ export default async function HomePage() {
       </header>
 
       {/* ── Contenido ── */}
-      <main className="max-w-7xl mx-auto px-6 py-8 pb-16">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 pb-16">
 
         {/* Banner trial */}
         {perfil.plan === 'trial' && (
@@ -113,12 +113,17 @@ export default async function HomePage() {
           </div>
         )}
 
-        {/* Layout de dos columnas */}
-        <div className="flex gap-8 items-start">
+        {/* Layout: columna única en móvil, dos columnas en ≥md */}
+        <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-start">
+
+          {/* ── Sidebar keywords: arriba en móvil, derecha en desktop ── */}
+          <aside className="w-full md:w-80 md:shrink-0 md:sticky md:top-20 order-first md:order-last">
+            <KeywordsPanel />
+          </aside>
 
           {/* ── Columna principal ── */}
           {errorLicitaciones ? (
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 w-full">
               <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-600">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0" aria-hidden="true">
                   <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4" />
@@ -134,11 +139,6 @@ export default async function HomePage() {
               totalNuevas={totalNuevas}
             />
           )}
-
-          {/* ── Sidebar keywords (sticky) ── */}
-          <aside className="w-80 shrink-0 sticky top-20">
-            <KeywordsPanel />
-          </aside>
 
         </div>
       </main>

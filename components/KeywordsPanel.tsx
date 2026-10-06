@@ -138,13 +138,13 @@ export default function KeywordsPanel() {
               onChange={(e) => setNueva(e.target.value)}
               placeholder="Ej: informática, aseo, construcción"
               disabled={guardando}
-              className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-900 text-xs placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#38bdf8] focus:border-transparent transition disabled:opacity-50"
+              className="w-full pl-8 pr-3 py-2 sm:py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-900 text-sm sm:text-xs placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#38bdf8] focus:border-transparent transition disabled:opacity-50"
             />
           </div>
           <button
             type="submit"
             disabled={guardando || !nueva.trim()}
-            className="inline-flex items-center justify-center gap-2 w-full px-4 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center justify-center gap-2 w-full px-4 py-2 sm:py-1.5 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-sm sm:text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             {guardando ? (
               <>
@@ -203,7 +203,7 @@ export default function KeywordsPanel() {
         {!cargando && keywords.length > 0 && (
           <ul className="divide-y divide-slate-100">
             {keywords.map((k) => (
-              <li key={k.id} className="flex items-center justify-between px-4 py-2.5">
+              <li key={k.id} className="flex items-center justify-between px-4 py-3 sm:py-2.5">
                 <div className="flex items-center gap-2.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#38bdf8] shrink-0" aria-hidden="true" />
                   <span className="text-slate-800 text-sm font-medium">{k.palabra_clave}</span>
@@ -211,7 +211,7 @@ export default function KeywordsPanel() {
                 <button
                   onClick={() => eliminarKeyword(k.id)}
                   aria-label={`Eliminar "${k.palabra_clave}"`}
-                  className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-red-500 transition-colors"
+                  className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-red-500 transition-colors cursor-pointer p-1"
                 >
                   <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                     <path d="M2 4h12M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 001 1h6a1 1 0 001-1l1-9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
@@ -233,10 +233,19 @@ export default function KeywordsPanel() {
         )}
       </div>
 
-      {/* ── Card tip ── */}
-      <div className="bg-[#e0f2fe] border border-[#38bdf8]/40 rounded-2xl px-4 py-3.5 space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-[#0891b2]">¿Cómo funciona?</p>
-        <div className="text-xs text-[#0e7490] leading-relaxed space-y-1.5">
+      {/* ── Card tip: colapsable en móvil ── */}
+      <details className="group bg-[#e0f2fe] border border-[#38bdf8]/40 rounded-2xl overflow-hidden">
+        <summary className="flex items-center justify-between px-4 py-3 cursor-pointer list-none">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#0891b2]">¿Cómo funciona?</p>
+          <svg
+            width="13" height="13" viewBox="0 0 16 16" fill="none"
+            className="text-[#0891b2] transition-transform group-open:rotate-180"
+            aria-hidden="true"
+          >
+            <path d="M3 6l5 5 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </summary>
+        <div className="px-4 pb-3.5 text-xs text-[#0e7490] leading-relaxed space-y-1.5">
           <p>
             <strong className="font-semibold">Una palabra:</strong> amplía los resultados.{' '}
             <em>aseo</em> encuentra "servicio de aseo", "insumos de aseo", etc.
@@ -252,7 +261,7 @@ export default function KeywordsPanel() {
             No importan las mayúsculas ni el plural: <em>computador</em> también encuentra "computadores".
           </p>
         </div>
-      </div>
+      </details>
 
     </div>
   )
