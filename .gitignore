@@ -44,3 +44,6 @@ next-env.d.ts
 .env.local
 .env
 *.env
+
+#Carpeta registro
+/regitro
