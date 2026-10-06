@@ -1,14 +1,10 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/utils/supabase/server'
 import LogoutButton from '@/components/LogoutButton'
-import ListaLicitaciones from '@/components/ListaLicitaciones'
+import KeywordsPanel from '@/components/KeywordsPanel'
+import SeccionLicitaciones from '@/components/SeccionLicitaciones'
 
-export default async function HomePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ orden?: string }>
-}) {
-  const { orden } = await searchParams
+export default async function HomePage() {
   const supabase = await createClient()
 
   const {
@@ -73,12 +69,6 @@ export default async function HomePage({
   )
 
   const licitaciones = [...(licitacionesData ?? [])]
-  if (orden === 'recientes') {
-    licitaciones.sort(
-      (a, b) =>
-        new Date(b.fecha_publicacion).getTime() - new Date(a.fecha_publicacion).getTime()
-    )
-  }
 
   const totalNuevas = licitaciones.filter((l) => l.estado_usuario === 'nueva').length
 
@@ -102,25 +92,13 @@ export default async function HomePage({
 
           {/* Nav */}
           <nav className="flex items-center gap-1">
-            <a
-              href="/keywords"
-              className="inline-flex items-center gap-2 px-4 py-1 text-[#94bcd8] hover:text-white transition-colors text-sm cursor-pointer"
-            >
-             
-              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" className="mb-0.5" aria-hidden="true">
-                <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.4" />
-                <path d="M10.5 10.5l3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-              </svg>
-              Palabras clave
-            </a>
-            <div className="w-px h-8 bg-white/10 mx-1" />
             <LogoutButton />
           </nav>
         </div>
       </header>
 
       {/* ── Contenido ── */}
-      <main className="max-w-5xl mx-auto px-6 py-8 pb-16">
+      <main className="max-w-7xl mx-auto px-6 py-8 pb-16">
 
         {/* Banner trial */}
         {perfil.plan === 'trial' && (
@@ -135,62 +113,34 @@ export default async function HomePage({
           </div>
         )}
 
-        {/* Cabecera sección */}
-        <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Licitaciones</h1>
-            <p className="text-slate-500 text-sm mt-1 flex items-center gap-2 flex-wrap">
-              Resultados que coinciden con tus palabras clave
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                {licitaciones.length} en total
-              </span>
-              {totalNuevas > 0 && (
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#38bdf8]/15 text-[#0891b2] border border-[#38bdf8]/30">
-                  {totalNuevas} sin revisar
-                </span>
-              )}
-            </p>
-          </div>
+        {/* Layout de dos columnas */}
+        <div className="flex gap-8 items-start">
 
-          {/* Ordenamiento */}
-          <div className="flex items-center gap-2 self-center">
-            <a
-              href="/"
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
-                orden !== 'recientes'
-                  ? 'bg-[#0d1b2e] text-white border-[#0d1b2e]'
-                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              Relevancia
-            </a>
-            <a
-              href="/?orden=recientes"
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
-                orden === 'recientes'
-                  ? 'bg-[#0d1b2e] text-white border-[#0d1b2e]'
-                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              Más recientes
-            </a>
-          </div>
+          {/* ── Columna principal ── */}
+          {errorLicitaciones ? (
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-600">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0" aria-hidden="true">
+                  <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4" />
+                  <path d="M8 5v3.5M8 10.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                </svg>
+                No se pudieron cargar las licitaciones: {errorLicitaciones.message}
+              </div>
+            </div>
+          ) : (
+            <SeccionLicitaciones
+              licitaciones={licitaciones}
+              userId={user.id}
+              totalNuevas={totalNuevas}
+            />
+          )}
+
+          {/* ── Sidebar keywords (sticky) ── */}
+          <aside className="w-80 shrink-0 sticky top-20">
+            <KeywordsPanel />
+          </aside>
+
         </div>
-
-        {/* Error de carga */}
-        {errorLicitaciones && (
-          <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-600 mb-4">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0" aria-hidden="true">
-              <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4" />
-              <path d="M8 5v3.5M8 10.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-            </svg>
-            No se pudieron cargar las licitaciones: {errorLicitaciones.message}
-          </div>
-        )}
-
-        {!errorLicitaciones && (
-          <ListaLicitaciones licitaciones={licitaciones} userId={user.id} />
-        )}
       </main>
     </div>
   )
