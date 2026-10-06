@@ -46,13 +46,13 @@ export default function SeccionLicitaciones({
   }
 
   return (
-    <div className="flex-1 min-w-0">
+    <div className="flex-1 min-w-0 w-full">
 
       {/* Cabecera sección */}
-      <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Licitaciones</h1>
-          <p className="text-slate-500 text-sm mt-1 flex items-center gap-2 flex-wrap">
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">Licitaciones</h1>
+          <p className="text-slate-500 text-sm mt-1 flex flex-wrap items-center gap-2">
             Resultados que coinciden con tus palabras clave
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
               {licitaciones.length} en total
@@ -66,11 +66,11 @@ export default function SeccionLicitaciones({
         </div>
 
         {/* Botones de orden */}
-        <div className="flex items-center gap-2 self-center">
+        <div className="flex items-center gap-2 sm:self-center shrink-0">
           <button
             onClick={() => cambiarOrden('relevancia')}
             disabled={isPending}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border cursor-pointer disabled:cursor-wait ${
+            className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors border cursor-pointer disabled:cursor-wait ${
               orden === 'relevancia'
                 ? 'bg-[#0d1b2e] text-white border-[#0d1b2e]'
                 : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
@@ -81,7 +81,7 @@ export default function SeccionLicitaciones({
           <button
             onClick={() => cambiarOrden('recientes')}
             disabled={isPending}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border cursor-pointer disabled:cursor-wait ${
+            className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors border cursor-pointer disabled:cursor-wait ${
               orden === 'recientes'
                 ? 'bg-[#0d1b2e] text-white border-[#0d1b2e]'
                 : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'

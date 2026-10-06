@@ -121,7 +121,7 @@ export default function ListaLicitaciones({
         </div>
         <p className="text-base font-semibold text-slate-800">Sin resultados todavía</p>
         <p className="text-sm text-slate-500">
-          Agrega o revisa tus palabras clave en el panel de la derecha.
+          Agrega o revisa tus palabras clave en el panel superior.
         </p>
       </div>
     )
@@ -132,11 +132,11 @@ export default function ListaLicitaciones({
       {licitaciones.map((lic) => (
         <li
           key={lic.codigo}
-          className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow duration-200 px-6 py-5"
+          className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow duration-200 px-4 sm:px-6 py-4 sm:py-5"
         >
           {/* Cabecera: nombre + badge estado */}
-          <div className="flex justify-between items-start gap-4 mb-2">
-            <h3 className="text-base font-bold text-slate-900 leading-snug flex-1 uppercase tracking-wide">
+          <div className="flex justify-between items-start gap-3 mb-2">
+            <h3 className="text-sm sm:text-base font-bold text-slate-900 leading-snug flex-1 uppercase tracking-wide">
               {lic.nombre}
             </h3>
             <BadgeEstadoUsuario estado={lic.estado_usuario} />
