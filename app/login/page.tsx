@@ -244,13 +244,6 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Link registro */}
-          <p className="mt-7 text-center text-base text-slate-500">
-            ¿No tienes cuenta?{' '}
-            <a href="/registro" className="text-[#38bdf8] font-semibold hover:text-[#0096c7] transition-colors">
-              Crear cuenta gratis
-            </a>
-          </p>
         </div>
       </div>
     </div>
