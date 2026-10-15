@@ -105,7 +105,7 @@ export default async function AdminPage() {
                 <path d="M6 8h10M6 11h7M6 14h5" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
               </svg>
             </div>
-            <span className="text-white font-bold text-base tracking-tight">LiciAlert</span>
+            <span className="text-white font-bold text-base tracking-tight">BidWin</span>
           </a>
 
           {/* Nav derecha */}
