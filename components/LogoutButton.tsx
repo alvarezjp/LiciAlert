@@ -33,7 +33,7 @@ export default function LogoutButton() {
                 <path d="M6 8h10M6 11h7M6 14h5" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
               </svg>
             </div>
-            <span className="text-[#0d1b2e] font-bold text-base tracking-tight">LiciAlert</span>
+            <span className="text-[#0d1b2e] font-bold text-base tracking-tight">BidWin</span>
           </div>
 
           <div>

@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "LiciAlert",
+  title: "BidWin",
   description: "Alerta de licitaciones diarias",
 };
 

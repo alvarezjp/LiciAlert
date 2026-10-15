@@ -17,7 +17,7 @@ export default async function RegistroPage() {
     <div className="min-h-screen bg-[#f0f4f8] font-sans">
       <header className="bg-[#0d1b2e]">
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-          <span className="text-white font-bold">LiciAlert</span>
+          <span className="text-white font-bold">BidWin</span>
           <a href="/admin" className="text-[#94bcd8] hover:text-white text-sm transition-colors">
             Volver al panel
           </a>

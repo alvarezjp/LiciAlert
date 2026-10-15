@@ -188,7 +188,7 @@ export default function ListaLicitaciones({
             {/* Botón principal */}
             <button
               onClick={() => verDetalle(lic)}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#0d1b2e] hover:bg-[#1a3a5c] text-white text-sm font-medium transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#0d1b2e] hover:bg-[#1a3a5c] text-white text-sm font-medium transition-colors cursor-pointer"
             >
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <path d="M7 3H3a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1V9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
@@ -197,28 +197,20 @@ export default function ListaLicitaciones({
               Ver en Mercado Público
             </button>
 
-            {/* Acción Vista — estilo inline con ícono */}
+            {/* Acción Vista */}
             <button
               onClick={() => marcarEstado(lic.codigo, 'vista')}
               disabled={lic.estado_usuario === 'vista' || lic.estado_usuario === 'postulada'}
-              className={`inline-flex items-center gap-1.5 text-sm transition-colors disabled:cursor-not-allowed ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-all cursor-pointer disabled:cursor-not-allowed ${
                 lic.estado_usuario === 'vista' || lic.estado_usuario === 'postulada'
-                  ? 'text-slate-400'
-                  : 'text-slate-500 hover:text-slate-700'
+                  ? 'bg-slate-100 text-slate-400 border-slate-200'
+                  : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50 hover:border-slate-400 hover:text-slate-800'
               }`}
             >
-              {lic.estado_usuario === 'vista' || lic.estado_usuario === 'postulada' ? (
-                /* ícono ojo tachado cuando ya está vista */
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                  <circle cx="8" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.3" />
-                  <path d="M1.5 8C3 4.5 5 3 8 3s5 1.5 6.5 5c-1.5 3.5-3.5 5-6.5 5s-5-1.5-6.5-5z" stroke="currentColor" strokeWidth="1.3" />
-                </svg>
-              ) : (
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                  <circle cx="8" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.3" />
-                  <path d="M1.5 8C3 4.5 5 3 8 3s5 1.5 6.5 5c-1.5 3.5-3.5 5-6.5 5s-5-1.5-6.5-5z" stroke="currentColor" strokeWidth="1.3" />
-                </svg>
-              )}
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <circle cx="8" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.3" />
+                <path d="M1.5 8C3 4.5 5 3 8 3s5 1.5 6.5 5c-1.5 3.5-3.5 5-6.5 5s-5-1.5-6.5-5z" stroke="currentColor" strokeWidth="1.3" />
+              </svg>
               Vista
             </button>
 
@@ -226,18 +218,18 @@ export default function ListaLicitaciones({
             <button
               onClick={() => marcarEstado(lic.codigo, 'postulada')}
               disabled={lic.estado_usuario === 'postulada'}
-              className={`inline-flex items-center gap-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-all cursor-pointer disabled:cursor-not-allowed ${
                 lic.estado_usuario === 'postulada'
-                  ? 'text-emerald-600'
-                  : 'text-slate-500 hover:text-emerald-600'
+                  ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                  : 'bg-white text-slate-600 border-slate-300 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700'
               }`}
             >
               {lic.estado_usuario === 'postulada' ? (
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                  <path d="M2.5 8.5l4 4 7-8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M2.5 8.5l4 4 7-8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               ) : (
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                   <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
               )}

@@ -50,7 +50,7 @@ export default function LoginPage() {
                 <path d="M6 8h10M6 11h7M6 14h5" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
               </svg>
             </div>
-            <span className="text-[#0d1b2e] font-bold text-base tracking-tight">LiciAlert</span>
+            <span className="text-[#0d1b2e] font-bold text-base tracking-tight">BidWin</span>
           </div>
 
           <div>
@@ -82,7 +82,7 @@ export default function LoginPage() {
               <path d="M6 8h10M6 11h7M6 14h5" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
             </svg>
           </div>
-          <span className="text-white font-bold text-xl tracking-tight">LiciAlert</span>
+          <span className="text-white font-bold text-xl tracking-tight">BidWin</span>
         </div>
 
         {/* Contenido hero */}
@@ -123,7 +123,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <p className="relative z-10 text-[#4a6a80] text-xs">
-          © {new Date().getFullYear()} LiciAlert — Datos de Mercado Público Chile
+          © {new Date().getFullYear()} BidWin — Datos de Mercado Público Chile
         </p>
       </div>
 
@@ -140,7 +140,7 @@ export default function LoginPage() {
               <path d="M6 8h10M6 11h7M6 14h5" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
             </svg>
           </div>
-          <span className="text-[#0d1b2e] font-bold text-lg">LiciAlert</span>
+          <span className="text-[#0d1b2e] font-bold text-lg">BidWin</span>
         </div>
 
         {/* Card */}
